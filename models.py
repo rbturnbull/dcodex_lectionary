@@ -77,6 +77,15 @@ class DayOfYear(models.Model):
         (FRIDAY, 'Friday'),
         (SATURDAY, 'Saturday'),
     ]
+    DAY_ABBREVIATIONS = [
+        (SUNDAY, 'Sun'),
+        (MONDAY, 'Mon'),
+        (TUESDAY, 'Tues'),
+        (WEDNESDAY, 'Wed'),
+        (THURSDAY, 'Th'),
+        (FRIDAY, 'Fri'),
+        (SATURDAY, 'Sat'),
+    ]
     day_of_week = models.IntegerField(choices=DAY_CHOICES)
     
     EASTER = 'E'
@@ -99,12 +108,22 @@ class DayOfYear(models.Model):
     earliest_date = models.CharField(max_length=15) 
     latest_date = models.CharField(max_length=15) 
     description = models.CharField(max_length=64)
-    def __str__(self):
-        string = "%s: %s" % (self.get_period_display(), self.get_day_of_week_display() )
+    
+    def description( self, abbreviation = False ):
+        day_choices = self.DAY_ABBREVIATIONS if abbreviation else DAY_CHOICES
+        string = "%s: %s" % (self.get_period_display(), day_choices[self.day_of_week][1] )
         if self.week.isdigit():
             string += ", Week %s" % (self.week )
         elif self.week != "Holy Week":
             string += ", %s" % (self.week )        
+    
+        if abbreviation:
+            string = string.replace("Week", "Wk")
+            string = string.replace("Feast of the Cross", "Cross")
+            string = string.replace(" Fare", "")
+        return string
+    def __str__(self):
+        return self.description(True)
         
         return string
     class Meta:
@@ -119,8 +138,18 @@ class LectionInSystem(models.Model):
 
     def __str__(self):
         return "%s in %s on %s" % ( str(self.lection), str(self.system), str(self.day_of_year) )
+        
+    def day_description(self):
+        if self.order_on_day < 2:
+            return str(self.day_of_year)
+        return "%s %d" % (str(self.day_of_year), self.order_on_day)
+        
+    def description(self):
+        return "%s. %s" % (self.day_description(), str(self.lection) )
     class Meta:
         ordering = ['day_of_year', 'order_on_day',]
+        
+        
     
 
 class LectionarySystem(models.Model):
@@ -140,6 +169,10 @@ class LectionarySystem(models.Model):
                 return lection
         return None
 
+    def lection_in_system_for_verse( self, verse ):
+        lection = self.lection_for_verse( verse )
+        return self.lectioninsystem_set.filter( lection=lection ).first()
+        
 class Lectionary( Manuscript ):
     system = models.ForeignKey(LectionarySystem, on_delete=models.CASCADE)
     
@@ -154,9 +187,9 @@ class Lectionary( Manuscript ):
         verbose_name_plural = 'Lectionaries'
     
     def render_verse_search( self, request, verse ):
-        lection = self.system.lection_for_verse( verse )
-        return render(request, self.verse_search_template(), {'verse': verse, 'manuscript': self, 'lection': lection} )
+        lection_in_system = self.system.lection_in_system_for_verse( verse )
+        return render(request, self.verse_search_template(), {'verse': verse, 'manuscript': self, 'lection_in_system': lection_in_system} )
 
     def render_location_popup( self, request, verse ):
-        lection = self.system.lection_for_verse( verse )    
-        return render(request, self.location_popup_template(), {'verse': verse, 'manuscript': self, 'lection': lection} )
+        lection_in_system = self.system.lection_in_system_for_verse( verse )
+        return render(request, self.location_popup_template(), {'verse': verse, 'manuscript': self, 'lection_in_system': lection_in_system} )

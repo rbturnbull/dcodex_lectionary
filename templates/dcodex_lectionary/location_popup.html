@@ -10,7 +10,7 @@
 		$('#lectionAtLocation').change(function() {
             get_load_verses($(this).val(), {{ verse.id }});
 		});
-		get_load_verses({{ lection.id }}, {{ verse.id }});
+		get_load_verses({{ lection_in_system.lection.id }}, {{ verse.id }});
     });
 </script>
 
@@ -19,12 +19,12 @@
 <div style='float: none;'>Calculated Verse: <span id=approximateVerseFromPosition></span></div>
 <form>
 	<select name=lection id=lectionAtLocation class='inputHeader verseLoadField'>
-        {% for l in manuscript.system.lections.all %}
-    		<option value="{{ l.id }}" 
-            {% if l.id == lection.id %}
+        {% for l in manuscript.system.lectioninsystem_set.all %}
+    		<option value="{{ l.lection.id }}" 
+            {% if l.id == lection_in_system.id %}
                 selected=selected
             {% endif %}
-            >{{ l }}</option>
+            >{{ l.description }}</option>
 
         {% endfor %}
 	</select>
