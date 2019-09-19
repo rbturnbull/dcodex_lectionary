@@ -1,0 +1,39 @@
+{% load static %}
+<script type="text/javascript">
+    function get_verses(lection_id, verse_id) {
+        alert(verse_id);
+        $('#verseSelectSpan').load("/dcodex_lectionary/ajax/lection-verses/", {'lection_id':lection_id, 'verse_id': verse_id, 'field_class':'verseSearchField', 'field_id':'verseSelect'}, function() {
+    		$('#verseSelect').change(function() {
+    		    alert("V"+$(this).val())
+		    });
+        });
+    }
+	$(document).ready(function() {	
+		$('#lectionSelect').change(function() {
+            get_verses($(this).val(), {{ verse.id }});
+		});
+		get_verses({{ lection.id }}, {{ verse.id }});
+    });
+</script>
+
+<form>
+	<br><center><span class=inputHeader id=showManuscriptSelect>{{ manuscript }}</span>	
+	<select name=lection id=lectionSelect class='inputHeader verseSearchField'>
+        {% for l in manuscript.system.lections.all %}
+    		<option value="{{ l.id }}" 
+            {% if l.id == lection.id %}
+                selected=selected
+            {% endif %}
+            >{{ l }}</option>
+
+        {% endfor %}
+	</select>
+	<span id=verseSelectSpan></span>
+
+	<input type="submit" value="" name=search id=seekVerseButton  class='inputHeader inputButton magnifyingGlass'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
+<!--
+	<span data-verseid="{{ verse.prev.id }}" class='inputHeader inputButton seekVerseLink noselect'>&nbsp;&nbsp;←&nbsp;&nbsp;<span class="tooltiptext">{{ verse.prev.reference_abbreviation }}</span></span>
+	<span data-verseid='{{ verse.next.id }}' class='inputHeader inputButton seekVerseLink noselect'>&nbsp;&nbsp;→&nbsp;&nbsp;<span class="tooltiptext">{{ verse.next.reference_abbreviation }}</span></span>
+	-->
+</form>

@@ -1,0 +1,37 @@
+{% load static %}
+<script type="text/javascript">
+    function get_load_verses(lection_id, verse_id) {
+        $('#verseAtLocationSpan').load("/dcodex_lectionary/ajax/lection-verses/", {'lection_id':lection_id, 'verse_id': verse_id, 'field_class':'verseLoadField', 'field_id':'verseAtLocation'}, function() {
+    		$('#verseAtLocation').change(function() {
+		    });
+        });
+    }
+	$(document).ready(function() {	
+		$('#lectionAtLocation').change(function() {
+            get_load_verses($(this).val(), {{ verse.id }});
+		});
+		get_load_verses({{ lection.id }}, {{ verse.id }});
+    });
+</script>
+
+<div id=locationOptionsClose class=closeButton></div>
+<center>
+<div style='float: none;'>Calculated Verse: <span id=approximateVerseFromPosition></span></div>
+<form>
+	<select name=lection id=lectionAtLocation class='inputHeader verseLoadField'>
+        {% for l in manuscript.system.lections.all %}
+    		<option value="{{ l.id }}" 
+            {% if l.id == lection.id %}
+                selected=selected
+            {% endif %}
+            >{{ l }}</option>
+
+        {% endfor %}
+	</select>
+	<span id=verseAtLocationSpan></span>
+    <input type="submit" value="" name=load class='inputHeader inputButton magnifyingGlass' id=loadVerseAtLocation >
+
+    <br>
+    <input type="submit" value='&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;⚑&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' name=saveLocation id=saveLocation class='inputHeader inputButton '>
+</form>
+</center>

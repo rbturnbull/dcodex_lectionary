@@ -1,0 +1,10 @@
+{% load static %}
+<select name=verse_id id='{{field_id}}' class='inputHeader {{ field_class }}'>
+    {% for v in lection.verses.all %}
+        <option value="{{ v.id }}" 
+        {% if v.id == verse.id %}
+            selected=selected
+        {% endif %}
+        >{{ v.bible_reference_abbreviation }}</option>
+    {% endfor %}
+</select>

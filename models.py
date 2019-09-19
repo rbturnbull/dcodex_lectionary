@@ -2,7 +2,62 @@ from django.db import models
 from django.db.models import Max, Min
 from dcodex.models import Manuscript, Verse
 from dcodex_bible.models import BibleVerse
+from django.shortcuts import render
+
+
 import logging
+
+class LectionaryVerse(Verse):
+    bible_verse = models.ForeignKey(BibleVerse, on_delete=models.CASCADE)
+    
+    def bible_reference( self, abbrevation = False ):
+        return self.bible_verse.reference( abbrevation )
+    
+    def bible_reference_abbreviation( self ):
+        return self.bible_verse.reference_abbreviation( )
+    
+    def reference(self, abbreviation = False, end_verse=None):
+        if end_verse:
+            return "vv %d–%d" % (self.id, end_verse.id)
+        return "%d" % (int(self.id))
+        
+    # Override
+    @classmethod
+    def get_from_dict( cls, dictionary ):
+        return cls.get_from_values(
+            dictionary.get('verse_id', 1) )
+
+    # Override
+    @classmethod
+    def get_from_string( cls, verse_as_string ):
+        logger = logging.getLogger(__name__)    
+
+        matches = re.match( ".*(\d+)", verse_as_string )
+        if matches:
+            line_number = matches.group(1)
+            logger.error("verse_as_string: %s.line number: %s"%(verse_as_string,line_number))
+            return cls.get_from_values(line_number)
+        else:
+            return None
+    
+    @classmethod
+    def get_from_values( cls, verse_id ):
+        try:
+            return cls.objects.filter( id=int(verse_id) ).first()
+        except:
+            return None
+    
+
+
+
+
+class Lection(models.Model):
+    verses = models.ManyToManyField(LectionaryVerse)
+    description = models.CharField(max_length=100)
+        
+    def __str__(self):
+        return self.description
+        
 
 class DayOfYear(models.Model):
     SUNDAY = 0
@@ -53,29 +108,55 @@ class DayOfYear(models.Model):
         
         return string
     class Meta:
-        verbose_name_plural = 'Days of year'
+        verbose_name_plural = 'Days of year'        
 
-class Lection(models.Model):
+    
+class LectionInSystem(models.Model):
+    lection = models.ForeignKey(Lection, on_delete=models.CASCADE)
+    system  = models.ForeignKey('LectionarySystem', on_delete=models.CASCADE)
     day_of_year = models.ForeignKey(DayOfYear, on_delete=models.CASCADE)
-    book = models.CharField(max_length=16)
-    passage_description = models.CharField(max_length=32)
-    
+    order_on_day = models.IntegerField(default=0)
+
     def __str__(self):
-        return "%s %s %s" % (self.day_of_year.__str__(), self.book, self.passage_description )
-class LectionaryVerse(Verse):
-    lection = models.ForeignKey(Lection, on_delete=models.CASCADE)
-    bible_verse = models.ForeignKey(BibleVerse, on_delete=models.CASCADE)
-    def weight(self):
-        return self.bible_verse.weight()
+        return "%s in %s on %s" % ( str(self.lection), str(self.system), str(self.day_of_year) )
+    class Meta:
+        ordering = ['day_of_year', 'order_on_day',]
     
-    def reference(self, abbreviation = False, end_verse=None):    
-        if end_verse != None:
-            return self.bible_verse.reference( abbreviation=abbreviation, end_verse=end_verse.bible_verse )
-        return self.bible_verse.reference( abbreviation=abbreviation )
-class LectionVerseSpan(models.Model):
-    lection = models.ForeignKey(Lection, on_delete=models.CASCADE)
-    start_verse = models.ForeignKey(LectionaryVerse, on_delete=models.CASCADE, related_name='LectionVerseSpan_start_verse', blank=True, null=True, default=None)
-    end_verse   = models.ForeignKey(LectionaryVerse, on_delete=models.CASCADE, related_name='LectionVerseSpan_end_verse', blank=True, null=True, default=None)
-    
+
+class LectionarySystem(models.Model):
+    name = models.CharField(max_length=200)
+    lections = models.ManyToManyField(Lection, through=LectionInSystem)
     def __str__(self):
-        return "%s on %s" % (self.start_verse.reference(abbreviation=True, end_verse=self.end_verse), self.lection.__str__() )
+        return self.name    
+        
+    def lections_in_system(self):
+        return LectionInSystem.objects.filter(system=self)        
+        
+    def lection_for_verse( self, verse ):
+        lections_with_verse = verse.lection_set.all()
+        lections_in_system = self.lections.all()
+        for lection in lections_with_verse:
+            if lection in lections_in_system:
+                return lection
+        return None
+
+class Lectionary( Manuscript ):
+    system = models.ForeignKey(LectionarySystem, on_delete=models.CASCADE)
+    
+    @classmethod
+    def verse_class(cls):
+        return LectionaryVerse
+    def verse_search_template(self):
+        return "dcodex_lectionary/verse_search.html"
+    def location_popup_template(self):
+        return 'dcodex_lectionary/location_popup.html'
+    class Meta:
+        verbose_name_plural = 'Lectionaries'
+    
+    def render_verse_search( self, request, verse ):
+        lection = self.system.lection_for_verse( verse )
+        return render(request, self.verse_search_template(), {'verse': verse, 'manuscript': self, 'lection': lection} )
+
+    def render_location_popup( self, request, verse ):
+        lection = self.system.lection_for_verse( verse )    
+        return render(request, self.location_popup_template(), {'verse': verse, 'manuscript': self, 'lection': lection} )
