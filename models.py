@@ -3,7 +3,7 @@ from django.db.models import Max, Min
 from dcodex.models import Manuscript, Verse
 from dcodex_bible.models import BibleVerse
 from django.shortcuts import render
-
+from itertools import chain
 
 import logging
 
@@ -179,22 +179,36 @@ class Lectionary( Manuscript ):
             return verse
 
         return cls.verse_class().objects.filter(bible_verse_id=verse_id).first()        
-
+    # Override
     def verse_search_template(self):
         return "dcodex_lectionary/verse_search.html"
+
+    # Override        
     def location_popup_template(self):
         return 'dcodex_lectionary/location_popup.html'
     class Meta:
         verbose_name_plural = 'Lectionaries'
     
+    # Override    
     def render_verse_search( self, request, verse ):
         lection_in_system = self.system.lection_in_system_for_verse( verse )
         return render(request, self.verse_search_template(), {'verse': verse, 'manuscript': self, 'lection_in_system': lection_in_system} )
 
+    # Override
     def render_location_popup( self, request, verse ):
         lection_in_system = self.system.lection_in_system_for_verse( verse )
         return render(request, self.location_popup_template(), {'verse': verse, 'manuscript': self, 'lection_in_system': lection_in_system} )
 
+    # Override
+    def comparison_texts( self, verse, manuscripts = None ):
+        lectionary_comparisons = super().comparison_texts( verse, manuscripts )
+        continuous_text_comparisons = super().comparison_texts( verse.bible_verse, manuscripts )
+        return list(chain(lectionary_comparisons, continuous_text_comparisons))
+
+
+        
+
+    # Override
     def title_dict( self, verse ):
         lection_in_system = self.system.lection_in_system_for_verse( verse )    
         url_ref = verse.url_ref()
