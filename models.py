@@ -9,17 +9,12 @@ import logging
 
 class LectionaryVerse(Verse):
     bible_verse = models.ForeignKey(BibleVerse, on_delete=models.CASCADE)
-    
-    def bible_reference( self, abbrevation = False ):
-        return self.bible_verse.reference( abbrevation )
-    
-    def bible_reference_abbreviation( self ):
-        return self.bible_verse.reference_abbreviation( )
+    unique_string = models.CharField(max_length=20, default="")
     
     def reference(self, abbreviation = False, end_verse=None):
         if end_verse:
             return "vv %d–%d" % (self.id, end_verse.id)
-        return "%d" % (int(self.id))
+        return self.bible_verse.reference( abbreviation )
         
     # Override
     @classmethod
@@ -30,15 +25,9 @@ class LectionaryVerse(Verse):
     # Override
     @classmethod
     def get_from_string( cls, verse_as_string ):
-        logger = logging.getLogger(__name__)    
-
-        matches = re.match( ".*(\d+)", verse_as_string )
-        if matches:
-            line_number = matches.group(1)
-            logger.error("verse_as_string: %s.line number: %s"%(verse_as_string,line_number))
-            return cls.get_from_values(line_number)
-        else:
-            return None
+        if verse_as_string.isdigit():
+            return cls.get_from_values( verse_as_string )
+        return cls.objects.filter( unique_string=verse_as_string ).first()
     
     @classmethod
     def get_from_values( cls, verse_id ):
@@ -46,7 +35,10 @@ class LectionaryVerse(Verse):
             return cls.objects.filter( id=int(verse_id) ).first()
         except:
             return None
-    
+
+    # Override
+    def url_ref(self):
+        return self.unique_string
 
 
 
@@ -179,6 +171,15 @@ class Lectionary( Manuscript ):
     @classmethod
     def verse_class(cls):
         return LectionaryVerse
+        
+    @classmethod
+    def verse_from_id(cls, verse_id):
+        verse = super().verse_from_id(verse_id)
+        if verse:
+            return verse
+
+        return cls.verse_class().objects.filter(bible_verse_id=verse_id).first()        
+
     def verse_search_template(self):
         return "dcodex_lectionary/verse_search.html"
     def location_popup_template(self):
@@ -193,3 +194,12 @@ class Lectionary( Manuscript ):
     def render_location_popup( self, request, verse ):
         lection_in_system = self.system.lection_in_system_for_verse( verse )
         return render(request, self.location_popup_template(), {'verse': verse, 'manuscript': self, 'lection_in_system': lection_in_system} )
+
+    def title_dict( self, verse ):
+        lection_in_system = self.system.lection_in_system_for_verse( verse )    
+        url_ref = verse.url_ref()
+        dict = { 
+            'title': "%s %s %s" % (self.siglum, lection_in_system.day_description(), verse.reference_abbreviation() ), 
+            'url': "/dcodex/ms/%s/%s/" % ( self.siglum, url_ref ) 
+        }
+        return dict    

@@ -16,7 +16,7 @@
 
 <form>
 	<br><center><span class=inputHeader id=showManuscriptSelect>{{ manuscript }}</span>	
-	<select name=lection id=lectionSelect class='inputHeader verseSearchField' style="font-size: 1.0em;'>
+	<select name=lection id=lectionSelect class='inputHeader verseSearchField' style="font-size: 1.0em;">
         {% for l in manuscript.system.lectioninsystem_set.all %}
     		<option value="{{ l.lection.id }}" 
             {% if l.id == lection_in_system.id %}
