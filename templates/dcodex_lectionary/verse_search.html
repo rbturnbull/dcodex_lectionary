@@ -3,12 +3,14 @@
     function get_verses(lection_id, verse_id) {
         $('#verseSelectSpan').load("/dcodex_lectionary/ajax/lection-verses/", {'lection_id':lection_id, 'verse_id': verse_id, 'field_class':'verseSearchField', 'field_id':'verseSelect'}, function() {
     		$('#verseSelect').change(function() {
+                seekVerse($(this).val(), {{ manuscript.id }});
 		    });
         });
     }
 	$(document).ready(function() {	
 		$('#lectionSelect').change(function() {
-            get_verses($(this).val(), {{ verse.id }});
+//            get_verses($(this).val(), {{ verse.id }});
+            seekVerse($(this).find('option:selected').data('firstverse'), {{ manuscript.id }});
 		});
 		get_verses({{ lection_in_system.lection.id }}, {{ verse.id }});
     });
@@ -18,20 +20,21 @@
 	<br><center><span class=inputHeader id=showManuscriptSelect>{{ manuscript }}</span>	
 	<select name=lection id=lectionSelect class='inputHeader verseSearchField' style="font-size: 1.0em;">
         {% for l in manuscript.system.lectioninsystem_set.all %}
-    		<option value="{{ l.lection.id }}" 
+    		<option value="{{ l.lection.id }}" data-firstverse="{{ l.lection.first_verse.id }}" 
             {% if l.id == lection_in_system.id %}
                 selected=selected
             {% endif %}
-            >{{ l.description }}</option>
+            >{{ l.description_max_chars }}</option>
 
         {% endfor %}
 	</select>
 	<span id=verseSelectSpan></span>
 
-	<input type="submit" value="" name=search id=seekVerseButton  class='inputHeader inputButton magnifyingGlass'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 
 <!--
-	<span data-verseid="{{ verse.prev.id }}" class='inputHeader inputButton seekVerseLink noselect'>&nbsp;&nbsp;←&nbsp;&nbsp;<span class="tooltiptext">{{ verse.prev.reference_abbreviation }}</span></span>
-	<span data-verseid='{{ verse.next.id }}' class='inputHeader inputButton seekVerseLink noselect'>&nbsp;&nbsp;→&nbsp;&nbsp;<span class="tooltiptext">{{ verse.next.reference_abbreviation }}</span></span>
+	<input type="submit" value="" name=search id=seekVerseButton  class='inputHeader inputButton magnifyingGlass'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 	-->
+	
+	<span data-verseid="{{ prev_verse.id }}" class='inputHeader inputButton seekVerseLink noselect'>&nbsp;&nbsp;←&nbsp;&nbsp;<span class="tooltiptext">{{ prev_verse.reference_abbreviation }}</span></span>
+	<span data-verseid='{{ next_verse.id }}' class='inputHeader inputButton seekVerseLink noselect'>&nbsp;&nbsp;→&nbsp;&nbsp;<span class="tooltiptext">{{ next_verse.reference_abbreviation }}</span></span>
 </form>

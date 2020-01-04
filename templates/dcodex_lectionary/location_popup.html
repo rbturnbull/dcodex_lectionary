@@ -24,12 +24,14 @@
             {% if l.id == lection_in_system.id %}
                 selected=selected
             {% endif %}
-            >{{ l.description }}</option>
+            >{{ l.description_max_chars }}</option>
 
         {% endfor %}
 	</select>
 	<span id=verseAtLocationSpan></span>
     <input type="submit" value="" name=load class='inputHeader inputButton magnifyingGlass' id=loadVerseAtLocation >
+    <span data-verseid='{{ prev_verse.id }}' class='inputHeader inputButton loadVerseLink noselect prevVerseLink' >&nbsp;&nbsp;←&nbsp;&nbsp;</span>
+    <span data-verseid='{{ next_verse.id }}' class='inputHeader inputButton loadVerseLink noselect nextVerseLink' >&nbsp;&nbsp;→&nbsp;&nbsp;</span>
 
     <br>
     <input type="submit" value='&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;⚑&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' name=saveLocation id=saveLocation class='inputHeader inputButton '>
