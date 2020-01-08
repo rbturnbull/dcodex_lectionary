@@ -76,7 +76,7 @@ class Lection(models.Model):
     def __str__(self):
         return self.description
 
-
+    # Deprecated - use add_verses_from_passages_string
     def add_verses_from_range( self, start_verse_string, end_verse_string, lection_descriptions_with_verses=[], create_verses=False ):
         lection_bible_verse_start = BibleVerse.get_from_string( start_verse_string )
         lection_bible_verse_end   = BibleVerse.get_from_string( end_verse_string )   
@@ -106,6 +106,33 @@ class Lection(models.Model):
             self.verses.add(lectionary_verse)
                     
         self.save()    
+
+    def add_verses_from_passages_string( self, passages_string, lection_descriptions_with_verses=[], create_verses=False ):
+        bible_verses = BibleVerse.get_verses_from_string( passages_string )
+        
+        # Find verses in other lections to use for this lection
+        verses_from_other_lections = []
+        for lection_description_with_verses in lection_descriptions_with_verses:
+            print("Finding lection:", lection_description_with_verses)
+            lection_with_verses = Lection.objects.get( description=lection_description_with_verses )
+            verses_from_other_lections += list( lection_with_verses.verses.all() )
+
+        # Add verses in order, use verses from other lections if present otherwise create them        
+        for bible_verse in bible_verses:        
+            lectionary_verse = None
+            for verse_from_other_lections in verses_from_other_lections:
+                if verse_from_other_lections.bible_verse.id == bible_verse.id:
+                    lectionary_verse = verse_from_other_lections
+                    break
+            
+            if lectionary_verse is None:
+                if create_verses == False:
+                    raise Exception( "Failed Trying to create lection %s using %s other lections but there are not the right number of verses." % (passages_string,lection_descriptions_with_verses) )
+                lectionary_verse = LectionaryVerse.new_from_bible_verse_id( bible_verse.id )
+                
+            self.verses.add(lectionary_verse)
+                    
+        self.save()    
     
 
     @classmethod
@@ -118,6 +145,16 @@ class Lection(models.Model):
         lection.add_verses_from_range( start_verse_string, end_verse_string, lection_descriptions_with_verses, create_verses )
     
         return lection    
+    @classmethod
+    def update_or_create_from_passages_string( cls, passages_string, lection_descriptions_with_verses=[], create_verses=False ):
+        lection, created = cls.objects.get_or_create(description=passages_string)
+        if created == False:
+            return lection
+
+        lection.verses.clear()  
+        lection.add_verses_from_passages_string( passages_string, lection_descriptions_with_verses, create_verses )
+    
+        return lection    
     def first_verse(self):
         return self.verses.first()
 
@@ -127,8 +164,17 @@ class Lection(models.Model):
     
 class FixedDate(models.Model):
     description = models.CharField(max_length=100)
+    date = models.DateField(default=None,null=True)
     def __str__(self):
         return self.description
+
+    @classmethod
+    def get_with_string( cls, date_string ):
+        from dateutil import parser
+        dt = parser.parse( date_string )
+        dt = dt.replace(year=1000)
+        print(dt, date_string)
+        return cls.objects.filter( date=dt ).first()
 
 class DayOfYear(models.Model):
     SUNDAY = 0
@@ -208,14 +254,21 @@ class LectionInSystem(models.Model):
     fixed_date = models.ForeignKey(FixedDate, on_delete=models.CASCADE, default=None, null=True)
     order_on_day = models.IntegerField(default=0)
     cumulative_mass_lections = models.IntegerField(default=-1) # The mass of all the previous lections until the start of this one
+    order = models.IntegerField(default=0)
     
     def __str__(self):
         return "%s in %s on %s" % ( str(self.lection), str(self.system), str(self.day_of_year) )
         
     def day_description(self):
-        if self.order_on_day < 2:
-            return str(self.day_of_year)
-        return "%s %d" % (str(self.day_of_year), self.order_on_day)
+        if self.day_of_year:
+            if self.order_on_day < 2:
+                return str(self.day_of_year)
+            return "%s %d" % (str(self.day_of_year), self.order_on_day)
+        elif self.fixed_date:
+            if self.order_on_day < 2:
+                return str(self.fixed_date)
+            return "%s %d" % (str(self.fixed_date), self.order_on_day)
+        return ""
         
     def description(self):
         return "%s. %s" % (self.day_description(), str(self.lection) )
@@ -231,7 +284,7 @@ class LectionInSystem(models.Model):
         return description[:max_chars-3] + "..."
         
     class Meta:
-        ordering = ['fixed_date', 'day_of_year', 'order_on_day',]
+        ordering = ['order','fixed_date', 'day_of_year', 'order_on_day',]
         
     def prev(self):
         return self.system.prev_lection_in_system( self )
@@ -251,6 +304,16 @@ class LectionarySystem(models.Model):
         return self.name    
     def first_verse(self):
         return self.lections_in_system().first().lection.verses.first()
+        
+    def maintainance(self):
+        self.reset_order()
+        self.calculate_masses()
+        
+    def reset_order(self):
+        lection_memberships = self.lections_in_system()
+        for order, lection_membership in enumerate(lection_memberships.all()):
+            lection_membership.order = order
+            lection_membership.save()
         
     def lections_in_system(self):
         return LectionInSystem.objects.filter(system=self)   
@@ -299,23 +362,51 @@ class LectionarySystem(models.Model):
         membership, created = LectionInSystem.objects.get_or_create(system=self, lection=lection, day_of_year=day_of_year)    
         membership.save()
         return membership
+    
+    def get_max_order( self ):
+        return self.lections_in_system().aggregate(Max('order')).get('order__max')
+    
+    def add_menologion_lection( self, fixed_date, lection ):
+        membership, created = LectionInSystem.objects.get_or_create(system=self, lection=lection, fixed_date=fixed_date)    
+        if created == True:
+            max_order = self.get_max_order()
+            membership.order = max_order + 1
+        membership.save()
+        return membership
+    
       
     def add_lection_from_description( self, day_of_year, lection_description ):
         lection, created = Lection.objects.get_or_create(description=lection_description)
         return self.add_lection( day_of_year, lection )
         
+    def add_menologion_lection_from_description( self, fixed_date, lection_description ):
+        lection, created = Lection.objects.get_or_create(description=lection_description)
+        return self.add_menologion_lection( fixed_date, lection )
+        
     def add_new_lection_from_description( self, day_of_year, lection_description, start_verse_string, end_verse_string, lection_descriptions_with_verses=[], create_verses=False ):        
         lection = Lection.update_or_create_from_description(description=lection_description, start_verse_string=start_verse_string, end_verse_string=end_verse_string, lection_descriptions_with_verses=lection_descriptions_with_verses, create_verses=create_verses)    
         return self.add_lection( day_of_year, lection )
        
+    def add_new_menologion_lection_from_passages_string( self, fixed_date, passages_string, **kwargs ):        
+        lection = Lection.update_or_create_from_passages_string(passages_string=passages_string, **kwargs)    
+        return self.add_menologion_lection( fixed_date, lection )
+       
     def delete_all_on_day( self, day_of_year ):
         print("Deleting all on Day of year:", day_of_year )
         lection_memberships = LectionInSystem.objects.filter(system=self, day_of_year=day_of_year).delete()
+    def delete_all_on_fixed_date( self, fixed_date ):
+        print("Deleting all on Day of year:", fixed_date )
+        lection_memberships = LectionInSystem.objects.filter(system=self, fixed_date=fixed_date).delete()
             
     def replace_with_lection( self, day_of_year, lection ):
         self.delete_all_on_day( day_of_year )
         print("Adding:", lection)
         return self.add_lection( day_of_year, lection )
+        
+    def replace_with_menologion_lection( self, fixed_date, lection ):
+        self.delete_all_on_fixed_date( fixed_date )
+        print("Adding:", lection)
+        return self.add_menologion_lection( fixed_date, lection )
         
     def replace_with_new_lection_from_description( self, day_of_year, lection_description, start_verse_string, end_verse_string, lection_descriptions_with_verses=[], create_verses=False ):        
         lection = Lection.update_or_create_from_description(description=lection_description, start_verse_string=start_verse_string, end_verse_string=end_verse_string, lection_descriptions_with_verses=lection_descriptions_with_verses, create_verses=create_verses)    

@@ -12,8 +12,10 @@ class LectionaryVerseAdmin(admin.ModelAdmin):
 @admin.register(Lection)    
 class LectionAdmin(admin.ModelAdmin):
     filter_horizontal = ('verses',)
+    search_fields = ['description']  
 
 admin.site.register(DayOfYear)
+admin.site.register(FixedDate)
 
 
 class LectionInSystemInline(admin.TabularInline):

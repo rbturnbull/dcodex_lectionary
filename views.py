@@ -68,9 +68,13 @@ def complete(request, request_sigla, request_lections):
             total_transcribed_count[ms.siglum] += transcribed_verses_count
             total += transcribed_verses_count
         df.loc[i] = [str(lection)] + percentages
-    df.loc[len(df)] = [total/total_verses_count*100.0/len(mss)] + [total_transcribed_count[ms.siglum]/total_verses_count*100.0 for ms in mss]
+    
+    def summary( total, total_verses_count ):
+        return "%d of %d (%f)" % (total, total_verses_count, total/total_verses_count*100.0 )
+        
+    df.loc[len(df)] = [summary(total, total_verses_count * len(mss)) ] + [total_transcribed_count[ms.siglum]/total_verses_count*100.0 for ms in mss]
                 
-    title = "%s Count" % (str(lections))
+    title = "%s Count" % (str(request_sigla))
     
     formatters={ms.siglum: '{:,.1f}%'.format for ms in mss}
     
