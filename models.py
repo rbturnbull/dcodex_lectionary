@@ -570,7 +570,7 @@ class Lectionary( Manuscript ):
         return { transcription.verse.bible_verse.id : transcription.transcription for transcription in self.transcriptions_in_lections( **kwargs ) }
     
 
-    def similarity_lection( self, lection, comparison_mss, similarity_func=distance.similaity_levenshtein, ignore_incipits=False ):
+    def similarity_lection( self, lection, comparison_mss, similarity_func=distance.similarity_levenshtein, ignore_incipits=False ):
 
         similarity_values = np.zeros( (len(comparison_mss),) )
         counts = np.zeros( (len(comparison_mss),), dtype=int )
@@ -578,16 +578,16 @@ class Lectionary( Manuscript ):
         for verse_index, verse in enumerate(lection.verses.all()):
             if verse_index == 0 and ignore_incipits:
                 continue
-            my_transcription = self.transcription( verse )
+            my_transcription = self.normalized_transcription( verse )
             if not my_transcription:
                 continue
             
             for ms_index, ms in enumerate(comparison_mss):
-                comparison_transcription = ms.transcription( verse ) if type(ms) is Lectionary else ms.transcription( verse.bible_verse )
+                comparison_transcription = ms.normalized_transcription( verse ) if type(ms) is Lectionary else ms.normalized_transcription( verse.bible_verse )
                 if not comparison_transcription:
                     continue
                 
-                similarity_values[ms_index] += similarity_func( my_transcription.transcription, comparison_transcription.transcription )
+                similarity_values[ms_index] += similarity_func( my_transcription, comparison_transcription )
                 counts[ms_index] += 1
 
         averages = []
@@ -595,9 +595,82 @@ class Lectionary( Manuscript ):
             average = None if count == 0 else similarity_value/count
             averages.append(average)
         return averages
+
+    def similarity_probabilities_lection( self, lection, comparison_mss, similarity_func=distance.similarity_levenshtein, ignore_incipits=False ):
+        import scipy.stats as st
+
+        similarity_values = [ list() for _ in comparison_mss ]
+        
+        for verse_index, verse in enumerate(lection.verses.all()):
+            if verse_index == 0 and ignore_incipits:
+                continue
+            my_transcription = self.normalized_transcription( verse )
+            if not my_transcription:
+                continue
+            
+            for ms_index, ms in enumerate(comparison_mss):
+                comparison_transcription = ms.normalized_transcription( verse ) if type(ms) is Lectionary else ms.normalized_transcription( verse.bible_verse )
+                if not comparison_transcription:
+                    continue
+                
+                similarity_values[ms_index].append( similarity_func( my_transcription, comparison_transcription ) )
+
+        results = []
+
+        if similarity_func ==    distance.similarity_levenshtein:             
+            # NEW DATA        
+            alpha = 0.390010
+            beta  = 0.043882
+
+            mu = 62.731379
+            sigma = 16.493010
+            low = 15.0
+            high = 100.0
+            
+            # OLD DATA
+#            mu = 54.596846 #± 0.452385
+#            sigma = 15.809653 #± 0.349997
+#            alpha = 0.483528 #± 0.028037
+#            beta = 0.112155 #± 0.010166
+
+            
+            
+            
+            an, bn = (low - mu) / sigma, (high - mu) / sigma
+        elif similarity_func == distance.similarity_ratcliff_obershelp:             
+            alpha = 0.414577
+            beta  = 0.070859
+
+            mu = 73.193615
+            sigma = 15.327640
+            low = 15.0
+            high = 100.0
+            an, bn = (low - mu) / sigma, (high - mu) / sigma
+        else:
+            logging.error( 'Probability parameters for distance function not set' )
+            return None
+
+        for ms_index in range(len(comparison_mss)):
+            similarities = np.asarray( similarity_values[ms_index] )
+            valid_similarities = similarities[ np.where( similarities > low ) ]
+
+            mean = valid_similarities.mean()
+            
+            log_bayes_factors      = st.gamma.logpdf( high-valid_similarities+0.1, alpha, scale=1.0/beta ) - st.truncnorm.logpdf(valid_similarities, an,bn, loc=mu, scale=sigma)
+            total_log_bayes_factor = np.sum(log_bayes_factors)
+            bayes_factor           = np.exp(total_log_bayes_factor)
+            prior_odds             = 0.5
+            posterior_odds         = prior_odds * bayes_factor
+            posterior_probability  = posterior_odds / (1.0+posterior_odds)
+            
+            results.extend([mean, posterior_probability])
+            
+        return results
+
                         
     def similarity_df( self, comparison_mss, **kwargs ):
-        columns = ['Lection']        
+        columns = ['Lection']
+                
         columns += [ms.siglum for ms in comparison_mss]
         
         df = pd.DataFrame(columns=columns)
@@ -608,6 +681,22 @@ class Lectionary( Manuscript ):
             df.loc[i] = [str(lection_in_system)] + averages
 
         return df    
+                        
+    def similarity_probabilities_df( self, comparison_mss, **kwargs ):
+        columns = ['Lection']
+        for ms in comparison_mss:
+            columns.extend( [ms.siglum, ms.siglum + " Probability"] )
+                
+        
+        df = pd.DataFrame(columns=columns)
+        for i, lection_in_system in enumerate(self.system.lections_in_system().all()):
+            lection = lection_in_system.lection
+            averages = self.similarity_probabilities_lection( lection, comparison_mss, **kwargs )
+                
+            df.loc[i] = [str(lection_in_system)] + averages
+
+        return df  
+          
     def similarity_families_array( self, comparison_mss, start_verse, end_verse, threshold, **kwargs ):
         verse_count = end_verse.rank - start_verse.rank + 1
         families_array = np.zeros( (verse_count,) )

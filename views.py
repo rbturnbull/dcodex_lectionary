@@ -76,9 +76,13 @@ def complete(request, request_sigla, request_lections):
                 
     title = "%s Count" % (str(request_sigla))
     
-    formatters={ms.siglum: '{:,.1f}%'.format for ms in mss}
+    formatters={ms.siglum: '{:,.1f}'.format for ms in mss}
     
-    return render(request, 'dcodex/table.html', {'table': df.to_html(formatters=formatters), 'title':title} )
+    styled_df = df.style.apply( lambda x: ['background-color: yellow' if value and value > 99 else 'background-color: lightgreen' if value > 0 else '' for value in x],
+                  subset=request_sigla).format(formatters)#.apply( 'text-align: center', subset=request_sigla )
+    return render(request, 'dcodex/table.html', {'table': styled_df.render(), 'title':title} )    
+    
+#    return render(request, 'dcodex/table.html', {'table': df.to_html(formatters=formatters), 'title':title} )
 
 
 
@@ -98,8 +102,30 @@ def similarity(request, request_siglum, comparison_sigla_string):
     
     df = manuscript.similarity_df(comparison_mss, ignore_incipits=True)
     title = "%s Similarity" % (str(manuscript.siglum))
-    threshold = 0.764    
+    threshold = 76.4    
     styled_df = df.style.apply( lambda x: ['font-weight: bold; background-color: yellow' if value and value > threshold else '' for value in x],
                   subset=comparison_sigla)
     return render(request, 'dcodex/table.html', {'table': styled_df.render(), 'title':title} )
     #return render(request, 'dcodex/table.html', {'table': df.to_html(), 'title':title} )
+
+
+@login_required
+def similarity_probabilities(request, request_siglum, comparison_sigla_string):
+    if request_siglum.isdigit():
+        manuscript = get_object_or_404(Manuscript, id=request_siglum)            
+    else:
+        manuscript = get_object_or_404(Manuscript, siglum=request_siglum)    
+
+    comparison_mss = []
+    comparison_sigla = comparison_sigla_string.split(",")
+    for comparison_siglum in comparison_sigla:
+        comparison_ms = Manuscript.objects.filter(siglum=comparison_siglum).first()
+        if comparison_ms:
+            comparison_mss.append( comparison_ms )
+    
+    df = manuscript.similarity_probabilities_df(comparison_mss, ignore_incipits=True)
+    title = "%s Similarity" % (str(manuscript.siglum))
+    threshold = 76.4    
+    styled_df = df.style.apply( lambda x: ['font-weight: bold; background-color: yellow' if value and value > threshold else '' for value in x],
+                  subset=comparison_sigla)
+    return render(request, 'dcodex/table.html', {'table': styled_df.render(), 'title':title} )
