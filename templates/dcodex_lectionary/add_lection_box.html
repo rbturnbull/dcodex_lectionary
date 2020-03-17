@@ -1,0 +1,192 @@
+{% load static %}
+<script type="text/javascript">
+
+    function get_general_data() {
+        var date_id    = $("#date").children("option:selected").val();		    
+        var insert_after_lection_id = $("#insert_after_lection").children("option:selected").val();
+
+        var data = {'date_id':date_id, 'insert_after_lection_id':insert_after_lection_id, 'manuscript_id': {{ manuscript.id }} };
+        return data;
+    }
+    
+    function insert_ajax(url, extra_data) {
+        var data = get_general_data();	
+        $.extend( data, extra_data );	    
+
+        $.ajax({
+            url: url,
+            type: "POST",
+            data: data,
+            dataType: 'json',
+            success: function (data) {
+                load_verse(data['first_verse_id'], {{ manuscript.id }});
+            }
+        });
+    
+    }
+
+    var overlapping_lection_IDs = [];
+	$(document).ready(function() {	
+	    $('.styleButton').click(function() {
+            $('.styleButton').removeClass( 'selected' );
+            $(this).addClass( 'selected' );
+		});
+		$('#makeNewLectionButton').click(function() {
+            $('.lectionMembershipTypeOptions').hide();
+            $('#makeNewLection').show();
+		});
+		$('#seeExistingLectionsButton').click(function() {
+            $('.lectionMembershipTypeOptions').hide();
+            $('#seeExistingLections').show();
+		});
+		$('#addReferenceButton').click(function() {
+            $('.lectionMembershipTypeOptions').hide();
+            $('#addReference').show();
+		});
+		$('#addOverlappingButton').click(function() {
+		    
+		    var selected = $("#overlappingLection").children("option:selected");
+		    $("#overlappingLections").append("<div>"+selected.text()+"</div>");
+		    overlapping_lection_IDs.push(selected.val());
+		});
+		
+		$("#insertLection").click(function() {
+		    var lection_id = $("#existingLections").children("option:selected").val();
+		    insert_ajax( '/dcodex_lectionary/ajax/insert-lection/', {'lection_id':lection_id} );
+		});
+		$("#insertReferenceSubmitButton").click(function() {
+		    var reference_text_en = $("#reference_text_en").val();
+//		    var incipit = $("#incipit").val();
+		    var reference_membership = $("#reference_membership").children("option:selected").val();
+		    
+		    insert_ajax( '/dcodex_lectionary/ajax/insert-reference/', {'reference_text_en':reference_text_en, 'reference_membership':reference_membership} );
+		});		
+		$("#date").change(function() {
+		    var date_id = $("#date").children("option:selected").val();		    
+		    var data = {'date_id':date_id };
+		    
+		    $("#suggestions").load( '/dcodex_lectionary/ajax/lection-suggestions/', data, function() {
+		        console.log('Loaded suggestions');
+		    });
+		});
+		$("#createLection").click(function() {
+		    var lection_description = $("#lectionDescription").val();
+		    var overlapping_lection_IDs_string = JSON.stringify(overlapping_lection_IDs);
+		    
+		    insert_ajax( '/dcodex_lectionary/ajax/create-lection/', {'lection_description':lection_description, 'overlapping_lection_IDs':overlapping_lection_IDs_string} );
+		});
+		
+		
+    });
+</script>
+<style>
+#styleButtons {
+    height: 30px;
+    margin: 20px;
+}
+.styleButton {
+    cursor: pointer;
+    border: 1px solid gray;
+    background-color: #ddd;
+    color: red;
+    padding: 6px;
+    margin: 6px;
+    border-radius: 9px;
+}
+.selected {
+    background-color: yellow;
+    color: black;
+}
+.small {
+    font-size: 0.85em;
+}
+</style>
+<center>
+<div id=newLectionClose class=closeButton></div>
+
+<span class='inputHeader' style='color: red;'>Add Lection</span>
+<form>
+    <div>
+        <span class='inputHeader' style='color: red;'>Date:&nbsp;&nbsp;</span>	
+	    <select name=date id=date class='inputHeader'>
+            {% for day in fixed_days %}
+                <option value="{{ day.id }}" 
+                {% if day.id == lection_in_system.fixed_date.id %}
+                    selected=selected
+                {% endif %}                
+                >{{ day }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <span class='inputHeader' style='color: red;'>Insert after:&nbsp;&nbsp;</span>	
+        <select name=insert_after_lection id=insert_after_lection class='inputHeader verseSearchField' style="font-size: 1.0em;">
+            {% for l in manuscript.system.lectioninsystem_set.all %}
+                <option value="{{ l.lection.id }}" data-firstverse="{{ l.lection.first_verse.id }}" 
+                {% if l.id == lection_in_system.id %}
+                    selected=selected
+                {% endif %}
+                >{{ l.description_max_chars }}</option>
+
+            {% endfor %}
+        </select>
+    </div>
+    
+	<div id=styleButtons><span id=makeNewLectionButton class=styleButton>Make New Lection:</span> – <span id=seeExistingLectionsButton class='styleButton selected'>Existing Lections:</span> – <span id=addReferenceButton class='styleButton'>Reference:</span></div>
+
+	
+	<div id=makeNewLection style='display: none;' class=lectionMembershipTypeOptions>
+        <div>
+            <span class='inputHeader' style='color: red;'>Description:&nbsp;&nbsp;</span>
+            <input type=text name=lectionDescription value="" size=25 style='text-align: center; background-color: white;' id=lectionDescription class='inputHeader'>
+        </div>
+	
+        <span class='inputHeader' style='color: red;'>Choose overlapping lections:&nbsp;&nbsp;</span><br>
+        <select name=overlappingLection id=overlappingLection class='inputHeader'>
+            {% for lection in lections %}
+                <option value="{{ lection.id }}">{{ lection.description_with_dates }}</option>
+            {% endfor %}
+        </select>
+        <span class='inputHeader inputButton noselect addLectionButton' id=addOverlappingButton>&nbsp;&nbsp;+&nbsp;&nbsp;</span>
+        <div id=overlappingLections></div>
+        <div>
+            <span class='inputHeader inputButton noselect addLectionButton' id=createLection>&nbsp;&nbsp;Create&nbsp;&nbsp;</span>
+        </div>        
+	</div>
+	<div id=seeExistingLections class=lectionMembershipTypeOptions>
+        <select name=lection id=existingLections class='inputHeader' style="font-size: 1.0em;">
+            {% for lection in lections %}
+                <option value="{{ lection.id }}">{{ lection.description_with_dates }}</option>
+            {% endfor %}
+        </select>
+        <div>
+            <span class='inputHeader inputButton noselect addLectionButton' id=insertLection>&nbsp;&nbsp;Insert&nbsp;&nbsp;</span>        
+        </div>
+        
+	</div>
+	<div id=addReference style='display: none;' class=lectionMembershipTypeOptions>
+        <div>
+            <span class='inputHeader' style='color: red;'>Reference Text (en):&nbsp;&nbsp;</span>
+            <input type=text name=reference_text_en value="" size=25 style='text-align: center; background-color: white;' id=reference_text_en class='inputHeader'>
+        </div>
+	
+        <span class='inputHeader' style='color: red;'>Reference Lection:&nbsp;&nbsp;</span>	
+        <select name=reference_membership id=reference_membership class='inputHeader' style="font-size: 1.0em;">
+            <option value="" selected=selected>None</option>        
+            {% for membership in manuscript.system.lectioninsystem_set.all %}
+                <option value="{{ membership.id }}" >{{ membership.description_max_chars }}</option>
+            {% endfor %}
+        </select>
+        <div>
+            <span class='inputHeader inputButton noselect' id=insertReferenceSubmitButton>&nbsp;&nbsp;Insert Reference&nbsp;&nbsp;</span>        
+        </div>
+
+	</div>
+	
+	<div id=suggestions>
+	</div>
+	
+	
+</form>
+</center>
+

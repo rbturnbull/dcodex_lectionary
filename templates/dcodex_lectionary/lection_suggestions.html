@@ -1,0 +1,23 @@
+{% load static %}
+<script type="text/javascript">
+	$(document).ready(function() {	
+		$('.suggestion').click(function() {
+		    $("#existingLections").val( $(this).data('lection') );
+		});		
+    });
+</script>
+
+<style>
+.suggestion {
+    color: red;
+    cursor: pointer;
+}
+</style>
+
+<center>
+
+{% for membership in memberships %}
+    <div class=suggestion data-lection='{{ membership.lection.id }}'>{{ membership.lection }} in {{ membership.system }}</div>
+{% endfor %}
+</center>
+

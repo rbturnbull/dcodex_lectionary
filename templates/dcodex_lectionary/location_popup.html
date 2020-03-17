@@ -6,11 +6,22 @@
 		    });
         });
     }
+    
 	$(document).ready(function() {	
+		$('#saveLocation').focus();	
 		$('#lectionAtLocation').change(function() {
             get_load_verses($(this).val(), {{ verse.id }});
 		});
 		get_load_verses({{ lection_in_system.lection.id }}, {{ verse.id }});
+		$('.addLectionShowButton').click(function() {
+            $('#addLectionWindow').load("/dcodex_lectionary/ajax/add-lection-box/", {'manuscript_id':{{ manuscript.id }}, 'lection_in_system_id': {{ lection_in_system.id }} }, function() {
+                register_close_buttons();
+                $(this).show();
+            });
+		    
+		});		
+		$('.popup').draggable();
+
     });
 </script>
 
@@ -27,7 +38,9 @@
             >{{ l.description_max_chars }}</option>
 
         {% endfor %}
+	
 	</select>
+	<span class='inputHeader inputButton noselect addLectionShowButton'>&nbsp;&nbsp;+&nbsp;&nbsp;<span class="tooltiptext">Add Lection</span></span>	
 	<span id=verseAtLocationSpan></span>
     <input type="submit" value="" name=load class='inputHeader inputButton magnifyingGlass' id=loadVerseAtLocation >
     <span data-verseid='{{ prev_verse.id }}' class='inputHeader inputButton loadVerseLink noselect prevVerseLink' >&nbsp;&nbsp;←&nbsp;&nbsp;</span>
@@ -35,5 +48,9 @@
 
     <br>
     <input type="submit" value='&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;⚑&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' name=saveLocation id=saveLocation class='inputHeader inputButton '>
+
+    
 </form>
 </center>
+
+<div class="popup" style='top: 100px; left: 100px; z-index: 3000000;' id=addLectionWindow></div>

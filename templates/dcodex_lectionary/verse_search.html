@@ -20,7 +20,7 @@
 	<br><center><span class=inputHeader id=showManuscriptSelect>{{ manuscript }}</span>	
 	<select name=lection id=lectionSelect class='inputHeader verseSearchField' style="font-size: 1.0em;">
         {% for l in manuscript.system.lectioninsystem_set.all %}
-    		<option value="{{ l.lection.id }}" data-firstverse="{{ l.lection.first_verse.id }}" 
+    		<option value="{{ l.lection.id }}" data-firstverse="{{ l.lection.first_verse_id }}" 
             {% if l.id == lection_in_system.id %}
                 selected=selected
             {% endif %}
@@ -38,3 +38,6 @@
 	<span data-verseid="{{ prev_verse.id }}" class='inputHeader inputButton seekVerseLink noselect'>&nbsp;&nbsp;←&nbsp;&nbsp;<span class="tooltiptext">{{ prev_verse.reference_abbreviation }}</span></span>
 	<span data-verseid='{{ next_verse.id }}' class='inputHeader inputButton seekVerseLink noselect'>&nbsp;&nbsp;→&nbsp;&nbsp;<span class="tooltiptext">{{ next_verse.reference_abbreviation }}</span></span>
 </form>
+
+
+</div>

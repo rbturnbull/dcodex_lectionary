@@ -1,6 +1,7 @@
 from django.db import models
+from django.db.models import F
 from django.db.models import Max, Min, Sum
-from dcodex.models import Manuscript, Verse
+from dcodex.models import Manuscript, Verse, VerseLocation
 from dcodex_bible.models import BibleVerse
 from django.shortcuts import render
 from itertools import chain
@@ -11,11 +12,28 @@ from collections import defaultdict
 
 import logging
 
+DEFAULT_LECTIONARY_VERSE_MASS = 50
+
 class LectionaryVerse(Verse):
-    bible_verse = models.ForeignKey(BibleVerse, on_delete=models.CASCADE)
-    unique_string = models.CharField(max_length=20, default="")
+    bible_verse = models.ForeignKey(BibleVerse, on_delete=models.CASCADE, default=None, null=True, blank=True )
+    unique_string = models.CharField(max_length=100, default="")
+    mass = models.PositiveIntegerField(default=0)
+    
+    class Meta:
+        ordering = ('bible_verse',)
+    def save(self,*args,**kwargs):
+        # Check to see if ID is assigned
+        if self.mass == 0:
+            self.mass = self.bible_verse.char_count if self.bible_verse else DEFAULT_LECTIONARY_VERSE_MASS
+            
+        super().save(*args,**kwargs)   
     
     def reference(self, abbreviation = False, end_verse=None):
+        if not self.bible_verse:
+            if abbreviation and "Heading" in self.unique_string:
+                return "Head"
+                
+            return self.unique_string
         if end_verse:
             return "vv %d–%d" % (self.id, end_verse.id)
         return self.bible_verse.reference( abbreviation )
@@ -68,13 +86,67 @@ class LectionaryVerse(Verse):
 
 
 
-
 class Lection(models.Model):
-    verses = models.ManyToManyField(LectionaryVerse)
+    verses = models.ManyToManyField(LectionaryVerse, through='LectionaryVerseMembership')
     description = models.CharField(max_length=100)
+    first_verse_id = models.IntegerField(default=0)
+    first_bible_verse_id = models.IntegerField(default=0)
+    
+
+    def save(self,*args,**kwargs):
+        # Check to see if ID is assigned
+        if not self.id:
+            super().save(*args,**kwargs)   
+        
+        first_verse = self.verses.first()
+        if first_verse:
+            self.first_verse_id = first_verse.id
+            
+            self.first_bible_verse_id = first_verse.bible_verse.id if first_verse.bible_verse else 0
+
+        super().save(*args,**kwargs)   
+            
+    class Meta:
+        ordering = ['first_bible_verse_id','description']
         
     def __str__(self):
         return self.description
+    
+    def description_max_chars( self, max_chars=40 ):
+        description = self.description
+        
+        if max_chars < 6:
+            max_chars = 6
+            
+        if len(description) < max_chars:
+            return description
+        return description[:max_chars-3] + "..."        
+
+    def dates(self):
+        field = 'fixed_date'
+        ids = {value[field] for value in LectionInSystem.objects.filter(lection=self).values(field) if value[field]}
+        fixed_dates =[FixedDate.objects.get(id=id) for id in ids];
+        
+        field = 'day_of_year'
+        ids = {value[field] for value in LectionInSystem.objects.filter(lection=self).values(field) if value[field]}
+        movable_dates =[DayOfYear.objects.get(id=id) for id in ids];
+        return movable_dates + fixed_dates
+        
+    def description_with_dates( self ):
+        description = self.description_max_chars()
+        
+        dates = self.dates()
+        if len(dates) == 0:
+            return description
+        return "%s (%s)" % (description, ", ".join( [str(date) for date in dates] ) )
+    def verse_memberships(self):
+        return LectionaryVerseMembership.objects.filter( lection=self ).all()
+    def reset_verse_order(self):
+        for verse_order, verse_membership in enumerate(self.verse_memberships()):
+            verse_membership.order = verse_order
+            verse_membership.save()
+            print(verse_membership)
+
 
     # Deprecated - use add_verses_from_passages_string
     def add_verses_from_range( self, start_verse_string, end_verse_string, lection_descriptions_with_verses=[], create_verses=False ):
@@ -107,27 +179,26 @@ class Lection(models.Model):
                     
         self.save()    
 
-    def add_verses_from_passages_string( self, passages_string, lection_descriptions_with_verses=[], create_verses=False ):
+    def add_verses_from_passages_string( self, passages_string, overlapping_lection_descriptions=[], overlapping_verses = [], overlapping_lections = [], create_verses=True ):
         bible_verses = BibleVerse.get_verses_from_string( passages_string )
         
         # Find verses in other lections to use for this lection
-        verses_from_other_lections = []
-        for lection_description_with_verses in lection_descriptions_with_verses:
-            print("Finding lection:", lection_description_with_verses)
-            lection_with_verses = Lection.objects.get( description=lection_description_with_verses )
-            verses_from_other_lections += list( lection_with_verses.verses.all() )
+        overlapping_lections += [Lection.objects.get( description=description ) for description in overlapping_lection_descriptions]
+        
+        for overlapping_lection in overlapping_lections:
+            overlapping_verses += list( overlapping_lection.verses.all() )
 
         # Add verses in order, use verses from other lections if present otherwise create them        
         for bible_verse in bible_verses:        
             lectionary_verse = None
-            for verse_from_other_lections in verses_from_other_lections:
-                if verse_from_other_lections.bible_verse.id == bible_verse.id:
-                    lectionary_verse = verse_from_other_lections
+            for overlapping_verse in overlapping_verses:
+                if overlapping_verse.bible_verse.id == bible_verse.id:
+                    lectionary_verse = overlapping_verse
                     break
             
             if lectionary_verse is None:
                 if create_verses == False:
-                    raise Exception( "Failed Trying to create lection %s using %s other lections but there are not the right number of verses." % (passages_string,lection_descriptions_with_verses) )
+                    raise Exception( "Failed Trying to create lection %s using %s other lections but there are not the right number of verses." % (passages_string,overlapping_verses) )
                 lectionary_verse = LectionaryVerse.new_from_bible_verse_id( bible_verse.id )
                 
             self.verses.add(lectionary_verse)
@@ -152,19 +223,36 @@ class Lection(models.Model):
             return lection
 
         lection.verses.clear()  
-        lection.add_verses_from_passages_string( passages_string, lection_descriptions_with_verses, create_verses )
+        lection.add_verses_from_passages_string( passages_string, overlapping_lection_descriptions=lection_descriptions_with_verses, create_verses=create_verses )
     
+        return lection    
+    @classmethod
+    def create_from_passages_string( cls, passages_string, **kwargs ):
+        lection = cls(description=passages_string)
+        lection.save()        
+        lection.add_verses_from_passages_string( passages_string, **kwargs )
+        lection.save()        
+
         return lection    
     def first_verse(self):
         return self.verses.first()
-
+    
     def calculate_mass(self):
-        mass = self.verses.aggregate( Sum('bible_verse__char_count') ).get('bible_verse__char_count__sum')
+        mass = self.verses.aggregate( Sum('mass') ).get('mass__sum')
         return mass
+
+class LectionaryVerseMembership(models.Model):
+    lection = models.ForeignKey(Lection, on_delete=models.CASCADE)
+    verse  = models.ForeignKey(LectionaryVerse, on_delete=models.CASCADE)
+    order = models.IntegerField(default=0)
+    class Meta:
+        ordering = ['order','verse__bible_verse']
+    def __str__(self):
+        return "%d: %s in %s" % (self.order, self.verse, self.lection)
     
 class FixedDate(models.Model):
     description = models.CharField(max_length=100)
-    date = models.DateField(default=None,null=True)
+    date = models.DateField(default=None,null=True, blank=True)
     def __str__(self):
         return self.description
 
@@ -172,9 +260,12 @@ class FixedDate(models.Model):
     def get_with_string( cls, date_string ):
         from dateutil import parser
         dt = parser.parse( date_string )
-        dt = dt.replace(year=1000)
-        print(dt, date_string)
+        year = 1003 if dt.month >= 9 else 1004
+        dt = dt.replace(year=year)
+        #print(dt, date_string)
         return cls.objects.filter( date=dt ).first()
+    class Meta:
+        ordering = ('date','description')
 
 class DayOfYear(models.Model):
     SUNDAY = 0
@@ -248,16 +339,22 @@ class DayOfYear(models.Model):
 
     
 class LectionInSystem(models.Model):
-    lection = models.ForeignKey(Lection, on_delete=models.CASCADE)
+    lection = models.ForeignKey(Lection, on_delete=models.CASCADE, default=None, null=True, blank=True)
     system  = models.ForeignKey('LectionarySystem', on_delete=models.CASCADE)
-    day_of_year = models.ForeignKey(DayOfYear, on_delete=models.CASCADE, default=None, null=True)
-    fixed_date = models.ForeignKey(FixedDate, on_delete=models.CASCADE, default=None, null=True)
+    day_of_year = models.ForeignKey(DayOfYear, on_delete=models.CASCADE, default=None, null=True, blank=True)
+    fixed_date = models.ForeignKey(FixedDate, on_delete=models.CASCADE, default=None, null=True, blank=True)
     order_on_day = models.IntegerField(default=0)
     cumulative_mass_lections = models.IntegerField(default=-1) # The mass of all the previous lections until the start of this one
     order = models.IntegerField(default=0)
+    reference_text_en = models.TextField(default="", blank=True)
+    incipit = models.TextField(default="", blank=True)
+    reference_membership = models.ForeignKey('LectionInSystem', on_delete=models.CASCADE, default=None, null=True, blank=True)
+    occasion_text = models.TextField(default="", blank=True)
+    occasion_text_en = models.TextField(default="", blank=True)
+    
     
     def __str__(self):
-        return "%s in %s on %s" % ( str(self.lection), str(self.system), str(self.day_of_year) )
+        return "%s in %s on %s" % ( str(self.lection), str(self.system), self.day_description() )
         
     def day_description(self):
         if self.day_of_year:
@@ -281,10 +378,10 @@ class LectionInSystem(models.Model):
             
         if len(description) < max_chars:
             return description
-        return description[:max_chars-3] + "..."
-        
+        return description[:max_chars-3] + "..."        
+    
     class Meta:
-        ordering = ['order','fixed_date', 'day_of_year', 'order_on_day',]
+        ordering = ('order','fixed_date', 'day_of_year', 'order_on_day',)
         
     def prev(self):
         return self.system.prev_lection_in_system( self )
@@ -292,7 +389,8 @@ class LectionInSystem(models.Model):
         return self.system.next_lection_in_system( self )
     def cumulative_mass_of_verse( self, verse ):
         mass = self.cumulative_mass_lections
-        cumulative_mass_verses = self.lection.verses.filter( rank__lt=verse.rank ).aggregate( Sum('bible_verse__char_count') ).get('bible_verse__char_count__sum')
+        verse_membership = LectionaryVerseMembership.objects.filter( lection=self.lection, verse=verse ).first()
+        cumulative_mass_verses = LectionaryVerseMembership.objects.filter( lection=self.lection, order__lt=verse_membership.order ).aggregate( Sum('verse__mass') ).get('verse__mass__sum')
         if cumulative_mass_verses:
             mass += cumulative_mass_verses
         return mass
@@ -301,10 +399,15 @@ class LectionarySystem(models.Model):
     name = models.CharField(max_length=200)
     lections = models.ManyToManyField(Lection, through=LectionInSystem)
     def __str__(self):
-        return self.name    
+        return self.name   
+    def first_lection_in_system(self):
+        return self.lections_in_system().first()         
+    def first_lection(self):
+        first_lection_in_system = self.first_lection_in_system()
+        return first_lection_in_system.lection
     def first_verse(self):
-        return self.lections_in_system().first().lection.verses.first()
-        
+        first_lection = self.first_lection()
+        return first_lection.first_verse()
     def maintainance(self):
         self.reset_order()
         self.calculate_masses()
@@ -314,6 +417,7 @@ class LectionarySystem(models.Model):
         for order, lection_membership in enumerate(lection_memberships.all()):
             lection_membership.order = order
             lection_membership.save()
+            lection_membership.lection.reset_verse_order()
         
     def lections_in_system(self):
         return LectionInSystem.objects.filter(system=self)   
@@ -345,6 +449,10 @@ class LectionarySystem(models.Model):
     def calculate_masses_all_systems( cls ):
         for system in cls.objects.all():
             system.calculate_masses()
+    @classmethod
+    def maintainance_all_systems( cls ):
+        for system in cls.objects.all():
+            system.maintainance()
     
     def lection_for_verse( self, verse ):
         lections_with_verse = verse.lection_set.all()
@@ -408,6 +516,24 @@ class LectionarySystem(models.Model):
         print("Adding:", lection)
         return self.add_menologion_lection( fixed_date, lection )
         
+    def insert_lection( self, date, lection, insert_after=None ):
+        order = None
+        if insert_after is not None:
+            insert_after_membership = LectionInSystem.objects.filter(system=self, lection=insert_after).first()
+            if insert_after_membership:
+                order = insert_after_membership.order + 1
+                LectionInSystem.objects.filter(system=self, order__gte=order).update( order=F('order') + 1 )
+                
+        
+        if not order:
+            return None
+
+        #logging.error( "fixed_date = %s [%s]" % (str(date), type(date) ) )
+        membership = self.add_menologion_lection( date, lection )        
+        membership.order = order
+        membership.save()
+        return membership
+        
     def replace_with_new_lection_from_description( self, day_of_year, lection_description, start_verse_string, end_verse_string, lection_descriptions_with_verses=[], create_verses=False ):        
         lection = Lection.update_or_create_from_description(description=lection_description, start_verse_string=start_verse_string, end_verse_string=end_verse_string, lection_descriptions_with_verses=lection_descriptions_with_verses, create_verses=create_verses)    
         self.replace_with_lection( day_of_year, lection )
@@ -431,7 +557,39 @@ class LectionarySystem(models.Model):
         if lection_in_system:
             return lection_in_system.cumulative_mass_of_verse( verse )
         return 0
+    
+    def create_reference( self, date, insert_after, description="", reference_text_en="", reference_membership=None, has_incipit=False ):
+        if not description:
+            description = "Reference: "+str(date)
+            heading_description = str(date) + " Heading"
+            incipit_description = str(date) + " Incipit"
+        else:
+            heading_description = description + " Heading"
+            incipit_description = description + " Incipit"
+
+        # Create Lection
+        lection = Lection(description=description)
+        lection.save()
+
+        # Add heading
+        heading_verse, created = LectionaryVerse.objects.get_or_create( bible_verse=None, unique_string=heading_description, rank=0 )        
+        lection.verses.add( heading_verse )
         
+        # Add Incipit
+        if has_incipit:
+            incipit, created = LectionaryVerse.objects.get_or_create( bible_verse=None, unique_string=incipit_description, rank=0 )
+            lection.verses.add( incipit )
+        
+        # Insert Into System
+        lection.save()
+        membership = self.insert_lection( date, lection, insert_after )
+        membership.reference_membership = reference_membership
+        membership.reference_text_en = reference_text_en
+        membership.save()
+        
+        return membership
+        
+
         
 class Lectionary( Manuscript ):
     system = models.ForeignKey(LectionarySystem, on_delete=models.CASCADE)
@@ -460,6 +618,9 @@ class Lectionary( Manuscript ):
     # Override    
     def render_verse_search( self, request, verse ):
         lection_in_system = self.system.lection_in_system_for_verse( verse )
+        if lection_in_system is None:
+            lection_in_system = self.system.first_lection_in_system()
+            verse = lection_in_system.lection.first_verse()
         return render(request, self.verse_search_template(), {'verse': verse, 'manuscript': self, 'lection_in_system': lection_in_system, 'next_verse':self.next_verse(verse), 'prev_verse':self.prev_verse(verse),} )
 
     # Override
@@ -500,6 +661,48 @@ class Lectionary( Manuscript ):
             
             prev_verse = lection_in_system.lection.verses.order_by('-rank').first()
         return prev_verse
+
+    def verse_membership( self, verse ):
+        return LectionaryVerseMembership.objects.filter( verse=verse, lection__lectioninsystem__system=self.system ).first()
+            
+    def location_before_or_equal( self, verse ):
+        current_verse_membership = self.verse_membership( verse )
+        current_lection = current_verse_membership.lection
+        
+        # Look for next located verse in lection
+        m = LectionaryVerseMembership.objects.filter( lection=current_verse_membership.lection, order__lte=current_verse_membership.order, verse__verselocation__manuscript=self ).order_by( '-order' ).first()
+
+        if not m:
+            # Look for next located verse in other lections
+            current_lection_in_system = self.system.lection_in_system_for_verse( verse )
+            m = LectionaryVerseMembership.objects.filter( lection__lectioninsystem__order__lt=current_lection_in_system.order, verse__verselocation__manuscript=self ).order_by( '-lection__lectioninsystem__order', '-order' ).first()        
+
+        if not m:
+            return None
+
+        return VerseLocation.objects.filter( manuscript=self, verse=m.verse ).first()
+        
+    def location_after( self, verse ):
+        current_verse_membership = self.verse_membership( verse )
+        current_lection = current_verse_membership.lection
+        
+        # Look for next located verse in lection
+        m = LectionaryVerseMembership.objects.filter( lection=current_verse_membership.lection, order__gt=current_verse_membership.order, verse__verselocation__manuscript=self ).order_by( 'order' ).first()
+
+        if not m:
+            # Look for next located verse in other lections
+            current_lection_in_system = self.system.lection_in_system_for_verse( verse )
+            m = LectionaryVerseMembership.objects.filter( lection__lectioninsystem__order__gt=current_lection_in_system.order, verse__verselocation__manuscript=self ).order_by( 'lection__lectioninsystem__order', 'order' ).first()        
+
+        if not m:
+            return None
+
+        return VerseLocation.objects.filter( manuscript=self, verse=m.verse ).first()
+                
+    def last_location( self, pdf ):
+        return VerseLocation.objects.filter( manuscript=self, pdf=pdf ).order_by('-page', '-y').first()
+    def first_location( self, pdf ):
+        return VerseLocation.objects.filter( manuscript=self, pdf=pdf ).order_by('page', 'y').first()
         
     def first_verse( self ):
         return self.system.first_verse()

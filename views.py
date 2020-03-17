@@ -1,9 +1,13 @@
 from django.http import HttpResponse
+from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 
 from dcodex_lectionary.models import *
 from dcodex.util import get_request_dict
+import logging
+import json
 
 @login_required
 def lection_verses(request):
@@ -15,6 +19,94 @@ def lection_verses(request):
     field_class = request_dict.get('field_class')
     
     return render(request, 'dcodex_lectionary/lection_verses.html', {'lection': lection, 'verse': verse, 'field_id':field_id , 'field_class':field_class} )
+
+@login_required
+def insert_lection(request):
+    request_dict = get_request_dict(request)
+
+    date         = get_object_or_404(FixedDate, id=request_dict.get('date_id'))   
+    lection      = get_object_or_404(Lection, id=request_dict.get('lection_id'))   
+    manuscript   = get_object_or_404(Manuscript, id=request_dict.get('manuscript_id'))   
+    insert_after_lection = get_object_or_404(Lection, id=request_dict.get('insert_after_lection_id'))   
+    
+    system = manuscript.system
+    
+    if system is None:
+        return Http404("The manuscript '%s' does not have a lectionary system." % manuscript)
+
+    membership = system.insert_lection( date, lection, insert_after=insert_after_lection )
+    system.maintainance()
+    
+    return JsonResponse({ 'first_verse_id':lection.first_verse_id,} );
+@login_required
+def create_lection(request):
+    request_dict = get_request_dict(request)
+
+    date         = get_object_or_404(FixedDate, id=request_dict.get('date_id'))   
+    manuscript   = get_object_or_404(Manuscript, id=request_dict.get('manuscript_id'))   
+    insert_after_lection = get_object_or_404(Lection, id=request_dict.get('insert_after_lection_id'))   
+
+    lection_description = request_dict.get('lection_description');
+    overlapping_lection_IDs = json.loads(request_dict.get('overlapping_lection_IDs'))
+    overlapping_lections = [Lection.objects.get(id=id) for id in overlapping_lection_IDs]
+    lection = Lection.create_from_passages_string( lection_description, overlapping_lections=overlapping_lections, create_verses=True )
+    
+    system = manuscript.system
+    
+    if system is None:
+        return Http404("The manuscript '%s' does not have a lectionary system." % manuscript)
+
+    membership = system.insert_lection( date, lection, insert_after=insert_after_lection )
+    system.maintainance()
+    
+    return JsonResponse({ 'first_verse_id':lection.first_verse_id,} );
+
+@login_required
+def insert_reference(request):
+    request_dict = get_request_dict(request)
+
+    date         = get_object_or_404(FixedDate, id=request_dict.get('date_id'))   
+    manuscript   = get_object_or_404(Manuscript, id=request_dict.get('manuscript_id'))   
+    insert_after_lection = get_object_or_404(Lection, id=request_dict.get('insert_after_lection_id'))   
+    
+    system = manuscript.system
+    
+    reference_text_en = request_dict.get('reference_text_en');
+    #occasion_text = request_dict.get('occasion_text');
+    #occasion_text_en = request_dict.get('occasion_text_en');
+    
+    reference_membership_id = request_dict.get('reference_membership')
+    reference_membership = get_object_or_404(LectionInSystem, id=reference_membership_id) if reference_membership_id else None
+    
+    if system is None:
+        return Http404("The manuscript '%s' does not have a lectionary system." % manuscript)
+
+    membership = system.create_reference( date=date, insert_after=insert_after_lection, reference_text_en=reference_text_en, reference_membership=reference_membership )
+
+    return JsonResponse({ 'first_verse_id': membership.lection.first_verse_id,} );
+
+@login_required
+def lection_suggestions(request):
+    request_dict = get_request_dict(request)
+    
+    date = get_object_or_404(FixedDate, id=request_dict.get('date_id'))   
+    memberships = LectionInSystem.objects.filter( fixed_date=date ).all()
+    
+    return render(request, 'dcodex_lectionary/lection_suggestions.html', {'memberships': memberships} )
+    
+    
+@login_required
+def add_lection_box(request):
+    request_dict = get_request_dict(request)
+
+    manuscript = get_object_or_404(Manuscript, id=request_dict.get('manuscript_id'))   
+    movable_days = DayOfYear.objects.all()
+    fixed_days = FixedDate.objects.all()
+    lections = Lection.objects.all()
+    
+    lection_in_system = get_object_or_404(LectionInSystem, id=request_dict.get('lection_in_system_id'))
+    
+    return render(request, 'dcodex_lectionary/add_lection_box.html', {'manuscript': manuscript, 'lection_in_system':lection_in_system, 'movable_days': movable_days, 'fixed_days':fixed_days, 'lections':lections} )
 
 @login_required
 def count(request, request_siglum):
