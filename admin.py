@@ -49,6 +49,7 @@ class LectionInSystemAdmin(admin.ModelAdmin):
 
 @admin.register(LectionarySystem)    
 class LectionarySystemAdmin(admin.ModelAdmin):
+#    inlines = [LectionInSystemInline]
     inlines = [LectionInSystemInlineSortable]
 
 admin.site.register(Lectionary)

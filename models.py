@@ -145,8 +145,21 @@ class Lection(models.Model):
         for verse_order, verse_membership in enumerate(self.verse_memberships()):
             verse_membership.order = verse_order
             verse_membership.save()
-            print(verse_membership)
+#            print(verse_membership)
 
+    def first_verse_id_in_set( self, intersection_set ):
+        for verse_id in LectionaryVerseMembership.objects.filter(lection=self).values_list( 'verse__id', flat=True ):        
+            logging.error( "first_verse_id_in_set %d" % (verse_id) )
+            if verse_id  in intersection_set:
+                return verse_id
+        return None
+
+    def last_verse_id_in_set( self, intersection_set ):
+        for verse_id in LectionaryVerseMembership.objects.filter(lection=self).reverse().values_list( 'verse__id', flat=True ):        
+            logging.error( "last_verse_id_in_set %d" % (verse_id) )
+            if verse_id  in intersection_set:
+                return verse_id
+        return None
 
     # Deprecated - use add_verses_from_passages_string
     def add_verses_from_range( self, start_verse_string, end_verse_string, lection_descriptions_with_verses=[], create_verses=False ):
@@ -408,7 +421,7 @@ class LectionarySystem(models.Model):
     def first_verse(self):
         first_lection = self.first_lection()
         return first_lection.first_verse()
-    def maintainance(self):
+    def maintenance(self):
         self.reset_order()
         self.calculate_masses()
         
@@ -450,9 +463,9 @@ class LectionarySystem(models.Model):
         for system in cls.objects.all():
             system.calculate_masses()
     @classmethod
-    def maintainance_all_systems( cls ):
+    def maintenance_all_systems( cls ):
         for system in cls.objects.all():
-            system.maintainance()
+            system.maintenance()
     
     def lection_for_verse( self, verse ):
         lections_with_verse = verse.lection_set.all()
@@ -666,38 +679,59 @@ class Lectionary( Manuscript ):
         return LectionaryVerseMembership.objects.filter( verse=verse, lection__lectioninsystem__system=self.system ).first()
             
     def location_before_or_equal( self, verse ):
-        current_verse_membership = self.verse_membership( verse )
-        current_lection = current_verse_membership.lection
-        
-        # Look for next located verse in lection
-        m = LectionaryVerseMembership.objects.filter( lection=current_verse_membership.lection, order__lte=current_verse_membership.order, verse__verselocation__manuscript=self ).order_by( '-order' ).first()
-
-        if not m:
-            # Look for next located verse in other lections
-            current_lection_in_system = self.system.lection_in_system_for_verse( verse )
-            m = LectionaryVerseMembership.objects.filter( lection__lectioninsystem__order__lt=current_lection_in_system.order, verse__verselocation__manuscript=self ).order_by( '-lection__lectioninsystem__order', '-order' ).first()        
-
-        if not m:
+        if not verse:
             return None
-
-        return VerseLocation.objects.filter( manuscript=self, verse=m.verse ).first()
+        logger = logging.getLogger(__name__)            
+    
+        current_verse_membership = self.verse_membership( verse )
+        if not current_verse_membership:
+            return None
         
+        verse_ids_with_locations = set(self.verse_ids_with_locations())
+        
+        # Search in current lection
+        current_lection = current_verse_membership.lection
+        for verse_id in LectionaryVerseMembership.objects.filter(lection=current_lection, order__lte=current_verse_membership.order).reverse().values_list( 'verse__id', flat=True ):        
+            if verse_id in verse_ids_with_locations:
+                return VerseLocation.objects.filter( manuscript=self, verse__id=verse_id ).first()
+        
+        current_lection_in_system = self.system.lection_in_system_for_verse( verse )
+
+        # Search in subsequent lections
+        lection_memberships = LectionInSystem.objects.filter( system=self.system, order__lt=current_lection_in_system.order ).reverse().all()
+        for lection_membership in lection_memberships:
+            verse_id = lection_membership.lection.last_verse_id_in_set( verse_ids_with_locations )   
+            if verse_id:
+                return VerseLocation.objects.filter( manuscript=self, verse__id=verse_id ).first()
+                 
+        return None                
     def location_after( self, verse ):
-        current_verse_membership = self.verse_membership( verse )
-        current_lection = current_verse_membership.lection
-        
-        # Look for next located verse in lection
-        m = LectionaryVerseMembership.objects.filter( lection=current_verse_membership.lection, order__gt=current_verse_membership.order, verse__verselocation__manuscript=self ).order_by( 'order' ).first()
-
-        if not m:
-            # Look for next located verse in other lections
-            current_lection_in_system = self.system.lection_in_system_for_verse( verse )
-            m = LectionaryVerseMembership.objects.filter( lection__lectioninsystem__order__gt=current_lection_in_system.order, verse__verselocation__manuscript=self ).order_by( 'lection__lectioninsystem__order', 'order' ).first()        
-
-        if not m:
+        if not verse:
             return None
+        logger = logging.getLogger(__name__)            
+    
+        current_verse_membership = self.verse_membership( verse )
+        if not current_verse_membership:
+            return None
+        
+        verse_ids_with_locations = set(self.verse_ids_with_locations())
+        
+        # Search in current lection
+        current_lection = current_verse_membership.lection
+        for verse_id in LectionaryVerseMembership.objects.filter(lection=current_lection, order__gt=current_verse_membership.order).values_list( 'verse__id', flat=True ):        
+            if verse_id in verse_ids_with_locations:
+                return VerseLocation.objects.filter( manuscript=self, verse__id=verse_id ).first()
+        
+        current_lection_in_system = self.system.lection_in_system_for_verse( verse )
 
-        return VerseLocation.objects.filter( manuscript=self, verse=m.verse ).first()
+        # Search in subsequent lections
+        lection_memberships = LectionInSystem.objects.filter( system=self.system, order__gt=current_lection_in_system.order ).all()
+        for lection_membership in lection_memberships:
+            verse_id = lection_membership.lection.first_verse_id_in_set( verse_ids_with_locations )   
+            if verse_id:
+                return VerseLocation.objects.filter( manuscript=self, verse__id=verse_id ).first()
+                 
+        return None                
                 
     def last_location( self, pdf ):
         return VerseLocation.objects.filter( manuscript=self, pdf=pdf ).order_by('-page', '-y').first()
