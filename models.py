@@ -96,7 +96,7 @@ class Lection(models.Model):
     def save(self,*args,**kwargs):
         # Check to see if ID is assigned
         if not self.id:
-            super().save(*args,**kwargs)   
+            return super().save(*args,**kwargs)   
         
         first_verse = self.verses.first()
         if first_verse:
@@ -104,7 +104,7 @@ class Lection(models.Model):
             
             self.first_bible_verse_id = first_verse.bible_verse.id if first_verse.bible_verse else 0
 
-        super().save(*args,**kwargs)   
+        return super().save(*args,**kwargs)   
             
     class Meta:
         ordering = ['first_bible_verse_id','description']
@@ -146,9 +146,11 @@ class Lection(models.Model):
             verse_membership.order = verse_order
             verse_membership.save()
 #            print(verse_membership)
+    def verse_ids(self):
+        return LectionaryVerseMembership.objects.filter(lection=self).values_list( 'verse__id', flat=True )
 
     def first_verse_id_in_set( self, intersection_set ):
-        for verse_id in LectionaryVerseMembership.objects.filter(lection=self).values_list( 'verse__id', flat=True ):        
+        for verse_id in self.verse_ids():        
             logging.error( "first_verse_id_in_set %d" % (verse_id) )
             if verse_id  in intersection_set:
                 return verse_id
@@ -205,7 +207,7 @@ class Lection(models.Model):
         for bible_verse in bible_verses:        
             lectionary_verse = None
             for overlapping_verse in overlapping_verses:
-                if overlapping_verse.bible_verse.id == bible_verse.id:
+                if overlapping_verse.bible_verse and overlapping_verse.bible_verse.id == bible_verse.id:
                     lectionary_verse = overlapping_verse
                     break
             
@@ -253,6 +255,7 @@ class Lection(models.Model):
     def calculate_mass(self):
         mass = self.verses.aggregate( Sum('mass') ).get('mass__sum')
         return mass
+        
 
 class LectionaryVerseMembership(models.Model):
     lection = models.ForeignKey(Lection, on_delete=models.CASCADE)
@@ -539,6 +542,10 @@ class LectionarySystem(models.Model):
                 
         
         if not order:
+            print('order is none')
+            print('insert_after', insert_after)
+            print('insert_after_membership  ', insert_after_membership )
+            print('system  ', self )
             return None
 
         #logging.error( "fixed_date = %s [%s]" % (str(date), type(date) ) )
@@ -558,7 +565,13 @@ class LectionarySystem(models.Model):
     def clone_to_system( self, new_system ):
         new_system.empty()
         for lection_membership in self.lections_in_system().all():
-            LectionInSystem.objects.get_or_create(system=new_system, lection=lection_membership.lection, day_of_year=lection_membership.day_of_year)    
+            LectionInSystem.objects.get_or_create(system=new_system, lection=lection_membership.lection, day_of_year=lection_membership.day_of_year, order=lection_membership.order,
+                    fixed_date=lection_membership.fixed_date,
+                    cumulative_mass_lections=lection_membership.cumulative_mass_lections,
+                    incipit=lection_membership.incipit,
+                    reference_text_en=lection_membership.reference_text_en,
+                    reference_membership=lection_membership.reference_membership,                    
+                    )    
     
     def clone_to_system_with_name(self, new_system_name ):
         new_system, created = LectionarySystem.objects.get_or_create(name=new_system_name)
@@ -581,21 +594,24 @@ class LectionarySystem(models.Model):
             incipit_description = description + " Incipit"
 
         # Create Lection
-        lection = Lection(description=description)
-        lection.save()
-
-        # Add heading
-        heading_verse, created = LectionaryVerse.objects.get_or_create( bible_verse=None, unique_string=heading_description, rank=0 )        
-        lection.verses.add( heading_verse )
+        print('getting', description)
+        lection, created = Lection.objects.get_or_create(description=description)
+        print('created', description)        
+        if created:
+            # Add heading
+            heading_verse, created = LectionaryVerse.objects.get_or_create( bible_verse=None, unique_string=heading_description, rank=0 )        
+            lection.verses.add( heading_verse )
         
-        # Add Incipit
-        if has_incipit:
-            incipit, created = LectionaryVerse.objects.get_or_create( bible_verse=None, unique_string=incipit_description, rank=0 )
-            lection.verses.add( incipit )
+            # Add Incipit
+            if has_incipit:
+                incipit, created = LectionaryVerse.objects.get_or_create( bible_verse=None, unique_string=incipit_description, rank=0 )
+                lection.verses.add( incipit )
+            lection.save()
+            
         
         # Insert Into System
-        lection.save()
         membership = self.insert_lection( date, lection, insert_after )
+        print('membership', membership)
         membership.reference_membership = reference_membership
         membership.reference_text_en = reference_text_en
         membership.save()
@@ -811,10 +827,14 @@ class Lectionary( Manuscript ):
 
         similarity_values = np.zeros( (len(comparison_mss),) )
         counts = np.zeros( (len(comparison_mss),), dtype=int )
-        
+        has_seen_incipit = False
         for verse_index, verse in enumerate(lection.verses.all()):
-            if verse_index == 0 and ignore_incipits:
+            if not verse.bible_verse:
                 continue
+            if not has_seen_incipit:
+                has_seen_incipit = True
+                if ignore_incipits:
+                    continue
             my_transcription = self.normalized_transcription( verse )
             if not my_transcription:
                 continue
@@ -905,7 +925,7 @@ class Lectionary( Manuscript ):
         return results
 
                         
-    def similarity_df( self, comparison_mss, **kwargs ):
+    def similarity_df( self, comparison_mss, min_verses = 2, **kwargs ):
         columns = ['Lection']
                 
         columns += [ms.siglum for ms in comparison_mss]
@@ -913,6 +933,9 @@ class Lectionary( Manuscript ):
         df = pd.DataFrame(columns=columns)
         for i, lection_in_system in enumerate(self.system.lections_in_system().all()):
             lection = lection_in_system.lection
+            if lection.verses.count() < min_verses:
+                continue
+                
             averages = self.similarity_lection( lection, comparison_mss, **kwargs )
                 
             df.loc[i] = [str(lection_in_system)] + averages

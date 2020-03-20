@@ -35,7 +35,7 @@ def insert_lection(request):
         return Http404("The manuscript '%s' does not have a lectionary system." % manuscript)
 
     membership = system.insert_lection( date, lection, insert_after=insert_after_lection )
-    system.maintainance()
+    system.maintenance()
     
     return JsonResponse({ 'first_verse_id':lection.first_verse_id,} );
 @login_required
@@ -57,7 +57,7 @@ def create_lection(request):
         return Http404("The manuscript '%s' does not have a lectionary system." % manuscript)
 
     membership = system.insert_lection( date, lection, insert_after=insert_after_lection )
-    system.maintainance()
+    system.maintenance()
     
     return JsonResponse({ 'first_verse_id':lection.first_verse_id,} );
 
