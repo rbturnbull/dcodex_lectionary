@@ -1,23 +1,24 @@
 {% load static %}
 <script type="text/javascript">
-    function get_verses(lection_id, verse_id) {
-        $('#verseSelectSpan').load("/dcodex_lectionary/ajax/lection-verses/", {'lection_id':lection_id, 'verse_id': verse_id, 'field_class':'verseSearchField', 'field_id':'verseSelect'}, function() {
-    		$('#verseSelect').change(function() {
-                seekVerse($(this).val(), {{ manuscript.id }});
-		    });
-        });
-    }
+//    function get_verses(lection_id, verse_id) {
+//        $('#verseSelectSpan').load("/dcodex_lectionary/ajax/lection-verses/", {'lection_id':lection_id, 'verse_id': verse_id, 'field_class':'verseSearchField', 'field_id':'verseSelect'}, function() {
+//        });
+//    }
 	$(document).ready(function() {	
 		$('#lectionSelect').change(function() {
 //            get_verses($(this).val(), {{ verse.id }});
             seekVerse($(this).find('option:selected').data('firstverse'), {{ manuscript.id }});
 		});
-		get_verses({{ lection_in_system.lection.id }}, {{ verse.id }});
+        $('#verseSelect').change(function() {
+            seekVerse($(this).val(), {{ manuscript.id }});
+        });
+		
+		//get_verses({{ lection_in_system.lection.id }}, {{ verse.id }});
     });
 </script>
 
 <form>
-	<br><center><span class=inputHeader id=showManuscriptSelect>{{ manuscript }}</span>	
+	<br><center><span class=inputHeader id=showManuscriptSelect>{{ manuscript.siglum }}</span>	
 	<select name=lection id=lectionSelect class='inputHeader verseSearchField' style="font-size: 1.0em;">
         {% for l in manuscript.system.lectioninsystem_set.all %}
     		<option value="{{ l.lection.id }}" data-firstverse="{{ l.lection.first_verse_id }}" 
@@ -28,7 +29,17 @@
 
         {% endfor %}
 	</select>
-	<span id=verseSelectSpan></span>
+	<span id=verseSelectSpan>
+        <select name=verse_id id='verseSelect' class='inputHeader verseSearchField'>
+            {% for v in lection_in_system.lection.verses.all %}
+                <option value="{{ v.id }}" 
+                {% if v.id == verse.id %}
+                    selected=selected
+                {% endif %}
+                >{{ v.reference_abbreviation }}</option>
+            {% endfor %}
+        </select>	
+	</span>
 
 
 <!--

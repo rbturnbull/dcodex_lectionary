@@ -1,5 +1,5 @@
 {% load static %}
-<select name=verse_id id='{{field_id}}' class='inputHeader {{ field_class }}'>
+<select name=verse_id id='{{ field_id }}' class='inputHeader {{ field_class }}'>
     {% for v in lection.verses.all %}
         <option value="{{ v.id }}" 
         {% if v.id == verse.id %}

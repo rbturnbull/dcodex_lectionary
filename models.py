@@ -151,14 +151,12 @@ class Lection(models.Model):
 
     def first_verse_id_in_set( self, intersection_set ):
         for verse_id in self.verse_ids():        
-            logging.error( "first_verse_id_in_set %d" % (verse_id) )
             if verse_id  in intersection_set:
                 return verse_id
         return None
 
     def last_verse_id_in_set( self, intersection_set ):
         for verse_id in LectionaryVerseMembership.objects.filter(lection=self).reverse().values_list( 'verse__id', flat=True ):        
-            logging.error( "last_verse_id_in_set %d" % (verse_id) )
             if verse_id  in intersection_set:
                 return verse_id
         return None
@@ -171,7 +169,7 @@ class Lection(models.Model):
         # Find verses in other lections to use for this lection
         verses_from_other_lections = []
         for lection_description_with_verses in lection_descriptions_with_verses:
-            print("Finding lection:", lection_description_with_verses)
+            #print("Finding lection:", lection_description_with_verses)
             lection_with_verses = Lection.objects.get( description=lection_description_with_verses )
             verses_from_other_lections += list( lection_with_verses.verses.all() )
 
