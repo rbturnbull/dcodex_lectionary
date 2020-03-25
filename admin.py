@@ -13,17 +13,21 @@ class LectionaryVerseMembershipInline(admin.TabularInline):
     raw_id_fields = ("verse",)    
     extra = 0
 
+
 # Register your models here.
 @admin.register(LectionaryVerse)    
 class LectionaryVerseAdmin(admin.ModelAdmin):
     raw_id_fields = ("bible_verse",)
+    search_fields = ['unique_string' ]
+    inlines = [LectionaryVerseMembershipInline]
+    
     
 @admin.register(Lection)    
 class LectionAdmin(admin.ModelAdmin):
     filter_horizontal = ('verses',)
     search_fields = ['description']  
-    inlines = [LectionaryVerseMembershipInline]
-#    inlines = [LectionaryVerseMembershipInlineSortable]
+#    inlines = [LectionaryVerseMembershipInline]
+    inlines = [LectionaryVerseMembershipInlineSortable]
  
 
 admin.site.register(DayOfYear)
@@ -49,7 +53,7 @@ class LectionInSystemAdmin(admin.ModelAdmin):
 
 @admin.register(LectionarySystem)    
 class LectionarySystemAdmin(admin.ModelAdmin):
-    inlines = [LectionInSystemInline]
-#    inlines = [LectionInSystemInlineSortable]
+#    inlines = [LectionInSystemInline]
+    inlines = [LectionInSystemInlineSortable]
 
 admin.site.register(Lectionary)
