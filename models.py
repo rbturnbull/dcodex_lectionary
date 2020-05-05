@@ -86,7 +86,7 @@ class LectionaryVerse(Verse):
         except:
             rank = 1
 
-        lectionary_verse = cls( bible_verse=bible_verse, rank=rank, unique_string=unique_string)
+        lectionary_verse = cls( bible_verse=bible_verse, rank=rank)
         lectionary_verse.set_unique_string()
         lectionary_verse.save()
         return lectionary_verse
@@ -95,7 +95,9 @@ class LectionaryVerse(Verse):
     def new_from_bible_verse_id( cls, bible_verse_id ):
         bible_verse = BibleVerse.objects.get( id=bible_verse_id )    
         return cls.new_from_bible_verse( bible_verse )
-
+    
+    def others_with_bible_verse( self ):
+        return LectionaryVerse.objects.filter( bible_verse=self.bible_verse ).exclude( id=self.id )
 
 
 
@@ -687,8 +689,18 @@ class Lectionary( Manuscript ):
     # Override
     def comparison_texts( self, verse, manuscripts = None ):
         lectionary_comparisons = super().comparison_texts( verse, manuscripts )
+        
+        # Find all other lectionary verse transcriptions with this Bible Verse
+        lectionary_verses_with_bible_verse = verse.others_with_bible_verse()
+        
+        lectionary_comparisons_same_bible_verse = self.transcription_class().objects.filter( verse__in=lectionary_verses_with_bible_verse )
+        if manuscripts:
+            lectionary_comparisons_same_bible_verse = lectionary_comparisons_same_bible_verse.filter( manuscript__in=manuscripts )
+
         continuous_text_comparisons = super().comparison_texts( verse.bible_verse, manuscripts )
-        return list(chain(lectionary_comparisons, continuous_text_comparisons))
+        
+#        return list(chain(lectionary_comparisons, continuous_text_comparisons))
+        return list(chain(lectionary_comparisons, lectionary_comparisons_same_bible_verse.all(), continuous_text_comparisons))        
 
     def next_verse( self, verse, lection_in_system = None ):
         if lection_in_system == None:
