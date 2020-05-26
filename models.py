@@ -276,11 +276,19 @@ class Lection(models.Model):
         mass = self.verses.aggregate( Sum('mass') ).get('mass__sum')
         return mass
         
+    def maintenance(self):
+        cumulative_mass_from_lection_start = 0
+        for verse_membership in self.verse_memberships():
+            verse_membership.cumulative_mass_from_lection_start = cumulative_mass_from_lection_start
+            verse_membership.save()
+            cumulative_mass_from_lection_start += verse_membership.verse.mass
+
 
 class LectionaryVerseMembership(models.Model):
     lection = models.ForeignKey(Lection, on_delete=models.CASCADE)
     verse  = models.ForeignKey(LectionaryVerse, on_delete=models.CASCADE)
     order = models.IntegerField(default=0)
+    cumulative_mass_from_lection_start = models.IntegerField(default=0, help_text="The total mass of verses from the beginning of the lection until this verse")
     class Meta:
         ordering = ['order','verse__bible_verse']
     def __str__(self):
@@ -337,6 +345,7 @@ class DayOfYear(models.Model):
     FEAST_OF_THE_CROSS = 'F'
     LENT = 'L'
     GREAT_WEEK = 'G'
+    EPIPHANY = 'T'
     
     PERIOD_CHOICES = [
         (EASTER, 'Easter'),
@@ -344,6 +353,7 @@ class DayOfYear(models.Model):
         (FEAST_OF_THE_CROSS, 'Feast of the Cross'),
         (LENT, 'Lent'),
         (GREAT_WEEK, 'Great Week'),
+        (EPIPHANY, 'Epiphany'),
     ]
     period = models.CharField(max_length=1, choices=PERIOD_CHOICES)
     
@@ -469,10 +479,18 @@ class LectionarySystem(models.Model):
         if day:
             return LectionInSystem.objects.filter(system=self, day_of_year=day).first()
         return None
-    def find_date( self, **kwargs ):
+    def find_date( self, last=False, **kwargs ):
+        memberships = self.find_date_all(**kwargs)
+        if not memberships:
+            return None
+        if last:
+            return memberships.last()
+        return memberships.first()
+
+    def find_date_all( self, **kwargs ):
         date = FixedDate.objects.filter(**kwargs).first()
         if date:
-            return LectionInSystem.objects.filter(system=self, fixed_date=date).first()
+            return LectionInSystem.objects.filter(system=self, fixed_date=date).all()
         return None
         
             
@@ -508,7 +526,12 @@ class LectionarySystem(models.Model):
         for lection_in_system in self.lections_in_system().all():
             lection_in_system.cumulative_mass_lections = cumulative_mass
             lection_in_system.save()
-            cumulative_mass += lection_in_system.lection.calculate_mass()
+
+            try:
+                cumulative_mass += lection_in_system.lection.calculate_mass()
+            except:
+                print( 'Failed to calculate mass:', lection_in_system.lection )
+                continue
 
     @classmethod
     def calculate_masses_all_systems( cls ):
@@ -516,7 +539,13 @@ class LectionarySystem(models.Model):
             system.calculate_masses()
     @classmethod
     def maintenance_all_systems( cls ):
+        print("Doing maintenance for each lection")
+        for lection in Lection.objects.all():
+            print(lection)
+            lection.maintenance()
+        print("Doing maintenance for each system")            
         for system in cls.objects.all():
+            print(system)        
             system.maintenance()
     
     def lection_for_verse( self, verse ):
@@ -631,6 +660,34 @@ class LectionarySystem(models.Model):
         if lection_in_system:
             return lection_in_system.cumulative_mass_of_verse( verse )
         return 0
+        
+    def verse_from_mass_difference( self, reference_verse, additional_mass ):
+        logger = logging.getLogger(__name__)            
+
+        logger.error("ref_verse "+str(reference_verse))
+        logger.error("additional_mass "+str(additional_mass))
+        cumulative_mass = self.cumulative_mass(reference_verse) + additional_mass
+        logger.error("cumulative_mass "+str(cumulative_mass))
+        
+        
+        
+        lection_membership = LectionInSystem.objects.filter( system=self, cumulative_mass_lections__lte=cumulative_mass ).order_by( '-cumulative_mass_lections' ).first()
+        logger.error("lection_membership "+str(lection_membership))
+        logger.error("lection_membership.cumulative_mass_lections "+str(lection_membership.cumulative_mass_lections))
+        
+        if lection_membership == None:
+            return None
+            
+        mass_from_start_of_lection = cumulative_mass - lection_membership.cumulative_mass_lections
+        logger.error("mass_from_start_of_lection "+str(mass_from_start_of_lection))
+
+        
+        verse_membership = LectionaryVerseMembership.objects.filter( lection=lection_membership.lection, cumulative_mass_from_lection_start__lte=mass_from_start_of_lection ).order_by( '-cumulative_mass_from_lection_start' ).first()
+
+        if verse_membership:
+            return verse_membership.verse
+            
+        return None                
     
     def create_reference( self, date, insert_after, description="", reference_text_en="", reference_membership=None, has_incipit=False ):
         if not description:
@@ -971,6 +1028,7 @@ class Lectionary( Manuscript ):
             df.loc[i] = [str(lection_in_system)] + averages
 
         return df    
+        
                         
     def similarity_probabilities_df( self, comparison_mss, min_verses=2, **kwargs ):
         columns = ['Lection','Lection_Membership__id','Lection_Membership__order']
@@ -985,6 +1043,10 @@ class Lectionary( Manuscript ):
             if lection.verses.count() < min_verses:
                 continue
 
+#            if ignore_untranscribed and self.lection_transcribed_count( lection ) == 0:
+#                print("Ignoring untranscribed lection:", lection)
+#                continue
+            
             results = self.similarity_probabilities_lection( lection, comparison_mss, **kwargs )
                 
             df.loc[index] = [str(lection_in_system), lection_in_system.id, lection_in_system.order] + results
@@ -1054,6 +1116,8 @@ class Lectionary( Manuscript ):
             
             
         
+    def verse_from_mass_difference( self, reference_verse, additional_mass ):
+        return self.system.verse_from_mass_difference( reference_verse, additional_mass )
 
 
     def cumulative_mass( self, verse ):
@@ -1066,6 +1130,7 @@ class Lectionary( Manuscript ):
     def plot_lections_similarity( 
                 self, 
                 mss_sigla, 
+                lections = None,
                 min_lection_index = None,            
                 max_lection_index = None,            
                 output_filename = None,
@@ -1077,6 +1142,7 @@ class Lectionary( Manuscript ):
                 colors = ['#007AFF', '#6EC038', 'darkred', 'magenta'],
                 mode = LIKELY__UNLIKELY,
                 xticks = [],
+                xticks_rotation=0,
                 minor_markers=1,
                 ymin=60,
                 ymax=100,
@@ -1088,7 +1154,9 @@ class Lectionary( Manuscript ):
                 circle_marker=True,
                 highlight_regions=[],
                 highlight_color='yellow',
-
+                fill_empty=True,
+                space_evenly=False,
+                ignore_untranscribed=False,
                     ):
 
         import pandas as pd
@@ -1118,36 +1186,60 @@ class Lectionary( Manuscript ):
             df = self.similarity_probabilities_df( mss, weights=weights, gotoh_param=gotoh_param, prior_log_odds=prior_log_odds )
             if csv_filename:
                 df.to_csv( csv_filename )
-        df = df.set_index( 'Lection_Membership__order' )
 
         if min_lection_index:
             if isinstance( min_lection_index, LectionInSystem ):
                 min_lection_index = min_lection_index.order
-            df = df[ df.index >= min_lection_index ]
+            df = df[ df['Lection_Membership__order'] >= min_lection_index ]
         if max_lection_index:
             if isinstance( max_lection_index, LectionInSystem ):
                 max_lection_index = max_lection_index.order
-            df = df[ df.index <= max_lection_index ]
+            print('max_lection_index', max_lection_index)
+            df = df[df['Lection_Membership__order'] <= max_lection_index ]
+            
+        if lections:
+            lection_ids = []
+            for lection in lections:
+                if isinstance(lection,LectionInSystem):
+                    lection_ids.append( lection.id )
+                else:
+                    lection_ids.append( lection )
+#            print(df)
+            df = df[ df['Lection_Membership__id'].isin( lection_ids ) ]
+#            print(df)
+#            print(lection_ids)
+#            return
     
         min = df.index.min()
         max = df.index.max()
-        df = df.reindex( np.arange( min, max+1 ) )  
-        print(df)
+        if fill_empty:
+            df = df.set_index( 'Lection_Membership__order' )    
+            df = df.reindex( np.arange( min, max+1 ) )  
+        
+        if space_evenly:
+            df.index = np.arange( len(df.index) )
     
+        print(df)
+        #return
+
         circle_marker = 'o' if circle_marker else ''
     
-        for index, ms_siglum in enumerate(mss_sigla.keys()):    
+        for index, ms_siglum in enumerate(mss_sigla.keys()): 
+            ms_df = df[ df[ms_siglum+'_similarity'].notnull() ] if ignore_untranscribed else df
+            
+           
             if mode is HIGHLY_LIKELY__LIKELY__ELSE:
-                plt.plot(df.index, df[ms_siglum+'_similarity'].mask(df[ms_siglum+"_probability"] < 0.95), '-', color=colors[index], linewidth=2.5, label=mss_sigla[ms_siglum] + " (Highly Likely)" );
-                plt.plot(df.index, df[ms_siglum+'_similarity'].mask( (df[ms_siglum+"_probability"] > 0.95) | (df[ms_siglum+"_probability"] < 0.5)), '-', color=colors[index], linewidth=1.5, label=mss_sigla[ms_siglum] + " (Likely)" );        
-                plt.plot(df.index, df[ms_siglum+'_similarity'].mask(df[ms_siglum+"_probability"] > 0.95), '--', color=colors[index], linewidth=0.5, label=mss_sigla[ms_siglum] + " (Unlikely)" );        
+                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask(ms_df[ms_siglum+"_probability"] < 0.95), '-', color=colors[index], linewidth=2.5, label=mss_sigla[ms_siglum] + " (Highly Likely)" );
+                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask( (ms_df[ms_siglum+"_probability"] > 0.95) | (ms_df[ms_siglum+"_probability"] < 0.5)), '-', color=colors[index], linewidth=1.5, label=mss_sigla[ms_siglum] + " (Likely)" );        
+                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask(ms_df[ms_siglum+"_probability"] > 0.95), '--', color=colors[index], linewidth=0.5, label=mss_sigla[ms_siglum] + " (Unlikely)" );        
         
             elif mode is HIGHLY_LIKELY__ELSE:
-                plt.plot(df.index, df[ms_siglum+'_similarity'].mask(df[ms_siglum+"_probability"] < 0.95), '-', color=colors[index], linewidth=2.5, label=mss_sigla[ms_siglum] + " (Highly Likely)" );
-                plt.plot(df.index, df[ms_siglum+'_similarity'], '--', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum] );        
+                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask(ms_df[ms_siglum+"_probability"] < 0.95), '-', color=colors[index], linewidth=2.5, label=mss_sigla[ms_siglum] + " (Highly Likely)" );
+                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'], '--', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum] );        
             else:    
-                plt.plot(df.index, df[ms_siglum+'_similarity'].mask(df[ms_siglum+"_probability"] < 0.5), marker=circle_marker, linestyle='-', color=colors[index], linewidth=2.5, label=mss_sigla[ms_siglum] + " (Likely)", zorder=11, markersize=8.0,  markerfacecolor=colors[index], markeredgecolor=colors[index]);
-                plt.plot(df.index, df[ms_siglum+'_similarity'], marker=circle_marker, linestyle='--', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum] + " (Unlikely)", zorder=10, markerfacecolor='white', markeredgecolor=colors[index], markersize=5.0 );        
+            
+                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask(ms_df[ms_siglum+"_probability"] < 0.5), marker=circle_marker, linestyle='-', color=colors[index], linewidth=2.5, label=mss_sigla[ms_siglum] + " (Likely)", zorder=11, markersize=8.0,  markerfacecolor=colors[index], markeredgecolor=colors[index]);
+                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'], marker=circle_marker, linestyle='--', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum] + " (Unlikely)", zorder=10, markerfacecolor='white', markeredgecolor=colors[index], markersize=5.0 );        
     #            plt.plot(df.index, df[ms_siglum+'_similarity'].mask(df[ms_siglum+"_probability"] > 0.5), '--', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum] + " (Unlikely)" );        
 
         plt.ylim([ymin, ymax])
@@ -1173,14 +1265,16 @@ class Lectionary( Manuscript ):
                 if not isinstance( membership[0], LectionInSystem ):
                     print("Trouble with membership:", membership)
                     continue
-                x = membership[0].order
+                print( 'looking for:', membership[0].id, membership )                    
+                x = df.index[ df['Lection_Membership__id'] == membership[0].id ].values.item()
                 description = membership[-1]
             else:
                 if not isinstance( membership, LectionInSystem ):
                     print("Trouble with membership:", membership)
                     continue
             
-                x = membership.order
+                print( 'looking for:', membership.id, membership )
+                x = df.index[ df['Lection_Membership__id'] == membership.id ].values.item()
                 if membership.day_of_year:
                     description = str(membership.day_of_year)
                 else:
@@ -1191,7 +1285,7 @@ class Lectionary( Manuscript ):
             major_tick_locations.append( x )
             major_tick_annotations.append( description )
             
-        plt.xticks(major_tick_locations, major_tick_annotations )        
+        plt.xticks(major_tick_locations, major_tick_annotations, rotation=xticks_rotation )        
         linewidth = 2
         ax.xaxis.grid(True, which='major', color='#666666', linestyle='-', alpha=0.4, linewidth=linewidth)
             
@@ -1207,14 +1301,14 @@ class Lectionary( Manuscript ):
                     print("Trouble with annotation:", annotation)
                     continue
             
-                annotation_x = annotation[0].order
+                annotation_x = df.index[ df['Lection_Membership__id'] == annotation[0].id ].item()
                 annotation_description = annotation[-1]
             else:
                 if not isinstance( annotation, LectionInSystem ):
                     print("Trouble with annotation:", annotation)
                     continue
             
-                annotation_x = annotation.order
+                annotation_x = df.index[ df['Lection_Membership__id'] == annotation.id ].item()
                 if annotation.day_of_year:
                     annotation_description = str(annotation.day_of_year)
                 else:
@@ -1231,10 +1325,10 @@ class Lectionary( Manuscript ):
             from matplotlib.patches import Rectangle
             region_start = region[0]
             if isinstance(region_start, LectionInSystem):
-                region_start = region_start.order
+                region_start = df.index[ df['Lection_Membership__id'] == region_start.id ].item()                
             region_end = region[1]
             if isinstance(region_end, LectionInSystem):
-                region_end = region_end.order
+                region_end = df.index[ df['Lection_Membership__id'] == region_end.id ].item()                
             
             rect = Rectangle((region_start,ymin),region_end-region_start,ymax-ymin,linewidth=1,facecolor=highlight_color)
             ax.add_patch(rect)
@@ -1244,4 +1338,17 @@ class Lectionary( Manuscript ):
     
         if output_filename:
             fig.tight_layout()
-            fig.savefig(output_filename)        
+            fig.savefig(output_filename)    
+            
+        notnull = False
+        for index, ms_siglum in enumerate(mss_sigla.keys()):     
+            notnull = notnull | df[ms_siglum+'_similarity'].notnull()
+            
+        ms_df = df[ notnull ]
+        print(ms_df)
+                
+        for index, ms_siglum in enumerate(mss_sigla.keys()):     
+            print( ms_siglum, df[ms_siglum+'_similarity'].mean() )
+
+        print(ms_df.shape)
+                

@@ -27,10 +27,8 @@
 
 <div id=locationOptionsClose class=closeButton></div>
 <center>
-<!--
-<div style='float: none;'>Calculated Verse: <span id=approximateVerseFromPosition></span></div>
--->
-<div><a href='/admin/dcodex_lectionary/lectionarysystem/{{ manuscript.system.id }}/change/' target="_blank">Admin</a></div>
+
+<div>System: <a href='/admin/dcodex_lectionary/lectionarysystem/{{ manuscript.system.id }}/change/' target="_blank">{{ manuscript.system }}</a> – <span style='float: none;'>Approx. Verse: <span id=approximateVerseFromPosition></span></span></div>
 <form>
 	<select name=lection id=lectionAtLocation class='inputHeader verseLoadField'>
         {% for l in manuscript.system.lectioninsystem_set.all %}
