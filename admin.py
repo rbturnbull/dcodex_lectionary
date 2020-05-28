@@ -20,7 +20,10 @@ class LectionaryVerseAdmin(admin.ModelAdmin):
     raw_id_fields = ("bible_verse",)
     search_fields = ['unique_string' ]
     inlines = [LectionaryVerseMembershipInline]
-    
+
+@admin.register(AffiliationLections)    
+class AffiliationLectionsAdmin(admin.ModelAdmin):
+    model = AffiliationLections
     
 @admin.register(Lection)    
 class LectionAdmin(admin.ModelAdmin):

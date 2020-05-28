@@ -216,7 +216,7 @@ class Lection(models.Model):
 
     def add_verses_from_passages_string( self, passages_string, overlapping_lection_descriptions=[], overlapping_verses = [], overlapping_lections = [], create_verses=True ):
         bible_verses = BibleVerse.get_verses_from_string( passages_string )
-        
+            
         # Find verses in other lections to use for this lection
         overlapping_lections += [Lection.objects.get( description=description ) for description in overlapping_lection_descriptions]
         
@@ -224,7 +224,7 @@ class Lection(models.Model):
             overlapping_verses += list( overlapping_lection.verses.all() )
 
         # Add verses in order, use verses from other lections if present otherwise create them        
-        for bible_verse in bible_verses:        
+        for bible_verse in bible_verses: 
             lectionary_verse = None
             for overlapping_verse in overlapping_verses:
                 if overlapping_verse.bible_verse and overlapping_verse.bible_verse.id == bible_verse.id:
@@ -237,7 +237,6 @@ class Lection(models.Model):
                 lectionary_verse = LectionaryVerse.new_from_bible_verse_id( bible_verse.id )
                 
             self.verses.add(lectionary_verse)
-                    
         self.save()    
     
 
@@ -259,7 +258,6 @@ class Lection(models.Model):
 
         lection.verses.clear()  
         lection.add_verses_from_passages_string( passages_string, overlapping_lection_descriptions=lection_descriptions_with_verses, create_verses=create_verses )
-    
         return lection    
     @classmethod
     def create_from_passages_string( cls, passages_string, **kwargs ):
@@ -1352,3 +1350,27 @@ class Lectionary( Manuscript ):
 
         print(ms_df.shape)
                 
+                
+class AffiliationLections(AffiliationBase):
+    """ An Affiliation class which is active only in certain lections. """    
+    lections = models.ManyToManyField(Lection, help_text="All the lections at which this affiliation object is active.")
+    
+    def is_active( self, verse ):
+        """ This affiliation is active whenever the verse is in the lection. If the verse is of type BibleVerse, then it is active if the lections have a mapping to that verse. """
+        if isinstance( verse, LectionaryVerse ):
+            return self.lections.filter( verses__id=verse.id ).exists()
+        elif isinstance( verse, BibleVerse ):
+            return self.lections.filter( verses__bible_verse__id=verse.id ).exists()
+        return False
+
+    def add_lections( self, lections ):
+        """ Adds an iterable of lections to this affiliation object. They can be Lection objects or strings with unique descriptions of the lections. """
+        for lection in lections:
+            if isinstance(lection, str):
+                lection = Lection.objects.filter(description=lection).first()
+            if lection and isinstance( lection, Lection ):
+                self.lections.add(lection)
+        self.save()
+                
+                
+    
