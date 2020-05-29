@@ -293,6 +293,12 @@ class LectionaryVerseMembership(models.Model):
         return "%d: %s in %s" % (self.order, self.verse, self.lection)
     
 class FixedDate(models.Model):
+    """
+    A liturgical day that corresponds to a fixed date in the calendar.
+    
+    Because DateTime fields in Django need to ba for a particular year, the year chosen was 1003 for September to December and 1004 for January to August. This year was chosen simply because 1004 is a leap year and so includes February 29.
+    """
+    
     description = models.CharField(max_length=100)
     date = models.DateField(default=None,null=True, blank=True)
     def __str__(self):
