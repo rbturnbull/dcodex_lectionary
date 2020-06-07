@@ -642,6 +642,7 @@ class LectionarySystem(models.Model):
         return lection
 
     def empty( self ):
+        """ This method removes references to all lections in this system and leaves the lectionary system empty. """
         LectionInSystem.objects.filter( system=self ).delete()
         
     def clone_to_system( self, new_system ):
