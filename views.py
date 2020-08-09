@@ -221,3 +221,25 @@ def similarity_probabilities(request, request_siglum, comparison_sigla_string):
     styled_df = df.style.apply( lambda x: ['font-weight: bold; background-color: yellow' if value and value > threshold else '' for value in x],
                   subset=comparison_sigla)
     return render(request, 'dcodex/table.html', {'table': styled_df.render(), 'title':title} )
+
+
+@login_required
+def affiliation_lections(request, affiliation_id, system_id):
+    affiliation = get_object_or_404(AffiliationLections, id=affiliation_id)   
+    system = get_object_or_404(LectionarySystem, id=system_id)   
+    
+    return render(request, 'dcodex_lectionary/affiliation_lections.html', {'affiliation': affiliation, 'system': system, } )
+
+
+@login_required
+def toggle_affiliation_lection(request):
+    request_dict = get_request_dict(request)
+
+    affiliation = get_object_or_404(AffiliationLections, id=request_dict.get('affiliation_id'))   
+    lection = get_object_or_404(Lection, id=request_dict.get('lection_id'))   
+    
+    if lection in affiliation.lections.all():
+        affiliation.lections.remove(lection)
+    else:
+        affiliation.lections.add(lection)
+    return HttpResponse("OK")

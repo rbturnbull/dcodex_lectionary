@@ -11,7 +11,7 @@ import pandas as pd
 import dcodex.distance as distance
 from collections import defaultdict
 from scipy.special import expit
-import gotoh_scores
+import gotoh_counts
 
 import logging
 
@@ -1002,8 +1002,8 @@ class Lectionary( Manuscript ):
                 if not comparison_transcription:
                     continue
 
-                counts = gotoh_scores.scores( my_transcription, comparison_transcription, *gotoh_param )
-                gotoh_counts[ms_index][:] += counts[1:]
+                counts = gotoh_counts.counts( my_transcription, comparison_transcription, *gotoh_param )
+                gotoh_counts[ms_index][:] += counts
 
         results = []        
         for ms_index in range(len(comparison_mss)):
@@ -1360,7 +1360,7 @@ class Lectionary( Manuscript ):
                 
 class AffiliationLections(AffiliationBase):
     """ An Affiliation class which is active only in certain lections. """    
-    lections = models.ManyToManyField(Lection, help_text="All the lections at which this affiliation object is active.")
+    lections = models.ManyToManyField(Lection, blank=True, help_text="All the lections at which this affiliation object is active.")
     
     def is_active( self, verse ):
         """ This affiliation is active whenever the verse is in the lection. If the verse is of type BibleVerse, then it is active if the lections have a mapping to that verse. """

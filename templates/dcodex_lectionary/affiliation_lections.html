@@ -1,0 +1,72 @@
+{% extends "dcodex/base_sidebars.html" %}
+{% load static %}
+{% load dcodex_tags %}
+{% load dcodex_lectionary_tags %}
+{% block title %}Affiliation Lections{% endblock %}
+
+{% block stylesheet %}
+<link rel="stylesheet" type="text/css" href="{% static 'dcodex/css/comparison.css' %}" />
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+<style>
+
+</style>
+{% endblock %}
+
+{% block middle %}
+
+<h2>{{affiliation}}</h2>
+<h2>{{system}}</h2>
+<ul class="list-group">
+{% for membership in system.lectioninsystem_set.all %}
+    <li class="list-group-item  {{affiliation|affiliation_active_for:membership.lection}}">{{membership}} {{affiliation|affiliation_button_for:membership.lection}}</li>
+{% endfor %}
+</ul>
+
+{% endblock %}
+
+{% block right_sidebar %}
+{% endblock %}
+
+
+
+{% block left_sidebar %}
+{% endblock %}
+
+
+{% block extra %}
+{% endblock %}
+
+
+{% block javascript %}
+<script src="{% static 'dcodex/js/jquery.scrollTo.min.js' %}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+<script src="https://use.fontawesome.com/releases/v5.0.8/js/all.js"></script>
+
+<script>
+
+$( document ).ready(function() {
+    console.log( "document loaded" );
+    $(".lection").click(function(e) {
+        $.ajax({
+            type: "POST",
+            url: "{% url 'dcodex-lectionary-toggle-affiliation-lection' %}",
+            data: {
+                'affiliation_id': {{ affiliation.id }}, 
+                'lection_id': $(this).data("lection"),
+                },
+            success: function(msg){
+                if (msg == "OK") {
+                    location.reload(); // Easiest for now
+                }
+                else {
+                    alert("There was a problem toggling the lection.");
+                }
+            }
+        });        
+	});
+});
+
+</script>
+{% endblock %}

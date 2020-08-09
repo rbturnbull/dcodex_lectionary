@@ -8,6 +8,7 @@ urlpatterns = [
     path('ajax/insert-lection/', views.insert_lection, name='dcodex-lectionary-insert-lection'),
     path('ajax/create-lection/', views.create_lection, name='dcodex-lectionary-create-lection'),
     path('ajax/insert-reference/', views.insert_reference, name='dcodex-lectionary-insert-reference'),
+    path('ajax/toggle_affiliation_lection', views.toggle_affiliation_lection, name='dcodex-lectionary-toggle-affiliation-lection'),
     
     path('ajax/lection-suggestions/', views.lection_suggestions, name='dcodex-lectionary-lection-suggestions'),    
     
@@ -15,5 +16,8 @@ urlpatterns = [
     path('ms/<str:request_siglum>/<str:comparison_sigla_string>/similarity/', views.similarity, name='dcodex-lectionary-similarity'),    
     path('ms/<str:request_siglum>/<str:comparison_sigla_string>/similarity_probabilities/', views.similarity_probabilities, name='dcodex-lectionary-similarity_probabilities'),    
     path('ms/<str:request_sigla>/<str:request_lections>/complete/', views.complete, name='dcodex-lectionary-complete'),    
+    path('affiliation/<int:affiliation_id>/<int:system_id>/', views.affiliation_lections, name='dcodex-lectionary-affiliation_lections'),    
+
+    
 ]
 
