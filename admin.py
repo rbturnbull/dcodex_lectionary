@@ -32,7 +32,7 @@ class LectionAdmin(admin.ModelAdmin):
 #    inlines = [LectionaryVerseMembershipInline]
     inlines = [LectionaryVerseMembershipInlineSortable]
  
-
+admin.site.register(AffiliationLectionarySystem)
 admin.site.register(DayOfYear)
 admin.site.register(FixedDate)
 

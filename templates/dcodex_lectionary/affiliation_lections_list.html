@@ -9,21 +9,21 @@
 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
 
 <style>
-.lection {
-    cursor: pointer;
-}
 </style>
 {% endblock %}
 
 {% block middle %}
 
 <h2>{{affiliation}}</h2>
+
 <h2>{{system}}</h2>
 <ul class="list-group">
 {% for membership in system.lections_in_system_min_verses %}
-    <li class="list-group-item lection {{affiliation|affiliation_active_for:membership.lection}}" data-lection="{{ membership.lection.id}}">{{membership}}</li>
+    {{affiliation|list_if_active:membership}}
 {% endfor %}
 </ul>
+
+<p>This sums in a total of {{ affiliation.distinct_bible_verses_count }} distinct verses.</p>
 
 {% endblock %}
 
@@ -47,36 +47,6 @@
 <script src="https://use.fontawesome.com/releases/v5.0.8/js/all.js"></script>
 
 <script>
-
-$( document ).ready(function() {
-    console.log( "document loaded" );
-    $(".lection").click(function(e) {
-        var lection = $(this);
-        $.ajax({
-            type: "POST",
-            url: "{% url 'dcodex-lectionary-toggle-affiliation-lection' %}",
-            data: {
-                'affiliation_id': {{ affiliation.id }}, 
-                'lection_id': lection.data("lection"),
-                },
-            success: function(msg){
-                if (msg == "OK") {
-                    //location.reload(); // Easiest for now
-                    if ( lection.hasClass( "active" ) ) {
-                        lection.removeClass( "active" );
-                    }
-                    else {
-                        lection.addClass( "active" );
-                    }
-                }
-                else {
-                    alert("There was a problem toggling the lection.");
-                }
-            }
-        });    
-        return false;    
-	});
-});
 
 </script>
 {% endblock %}

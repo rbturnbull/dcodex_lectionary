@@ -508,6 +508,10 @@ class LectionarySystem(models.Model):
         
     def lections_in_system(self):
         return LectionInSystem.objects.filter(system=self)   
+
+    def lections_in_system_min_verses(self, min_verses=2):
+        return [m for m in self.lections_in_system().all() if m.lection.verses.count() >= min_verses]
+                        
         
     def next_lection_in_system(self, lection_in_system):
         found = False
@@ -1016,7 +1020,6 @@ class Lectionary( Manuscript ):
                         
         return results
 
-                        
     def similarity_df( self, comparison_mss, min_verses = 2, **kwargs ):
         columns = ['Lection']
                 
@@ -1357,7 +1360,23 @@ class Lectionary( Manuscript ):
 
         print(ms_df.shape)
                 
-                
+class AffiliationLectionarySystem(AffiliationBase):
+    """ An Affiliation class which is active for all lections in a lectionary system (unless specified in an exclusion list). """    
+    system = models.ForeignKey(LectionarySystem, on_delete=models.CASCADE)
+    exclude = models.ManyToManyField(Lection, blank=True, help_text="All the lections at which this affiliation object is not active.")
+
+    def is_active( self, verse ):
+        """ This affiliation is active whenever the verse is in the lectionary system (unles in the list of excluded lections)
+        
+        If the verse is of type BibleVerse, then it is active if the active lections have a mapping to that verse.
+        """
+        if isinstance( verse, LectionaryVerse ):
+            return self.system.lections.filter( verses__id=verse.id ).exclude(id__in=self.exclude.values_list( 'id', flat=True )).exists()
+        elif isinstance( verse, BibleVerse ):
+            return self.system.lections.filter( verses__bible_verse__id=verse.id ).exclude(id__in=self.exclude.values_list( 'id', flat=True )).exists()
+        return False
+
+
 class AffiliationLections(AffiliationBase):
     """ An Affiliation class which is active only in certain lections. """    
     lections = models.ManyToManyField(Lection, blank=True, help_text="All the lections at which this affiliation object is active.")
@@ -1379,5 +1398,26 @@ class AffiliationLections(AffiliationBase):
                 self.lections.add(lection)
         self.save()
                 
+    def distinct_bible_verses(self):
+        """ Returns a set of all the distinct verses from the lections of this affiliation object. """
+        distinct_verses = set()
+        for lection in self.lections.all():
+            distinct_verses.update([v.bible_verse for v in lection.verses.all()])
+        return distinct_verses
+        
+    def distinct_bible_verses_count(self):
+        """ Returns the total number of distinct verses from the lections of this affiliation object. """
+        return len(self.distinct_bible_verses())
+            
+    def verse_count(self):
+        """ 
+        Returns the total number of verses from the lections of this affiliation object.
+        
+        This may include verses multiple times.
+        """
+        count = 0
+        for lection in self.lections.all():
+            count += lection.verses.count() # This should be done with an aggregation function in django
+        return count
                 
     

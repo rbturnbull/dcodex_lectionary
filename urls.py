@@ -17,6 +17,7 @@ urlpatterns = [
     path('ms/<str:request_siglum>/<str:comparison_sigla_string>/similarity_probabilities/', views.similarity_probabilities, name='dcodex-lectionary-similarity_probabilities'),    
     path('ms/<str:request_sigla>/<str:request_lections>/complete/', views.complete, name='dcodex-lectionary-complete'),    
     path('affiliation/<int:affiliation_id>/<int:system_id>/', views.affiliation_lections, name='dcodex-lectionary-affiliation_lections'),    
+    path('affiliation_lections_list/<int:affiliation_id>/<int:system_id>/', views.affiliation_lections_list, name='dcodex-lectionary-affiliation_lections_list'),    
 
     
 ]

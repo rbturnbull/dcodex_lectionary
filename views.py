@@ -232,6 +232,14 @@ def affiliation_lections(request, affiliation_id, system_id):
 
 
 @login_required
+def affiliation_lections_list(request, affiliation_id, system_id):
+    affiliation = get_object_or_404(AffiliationLections, id=affiliation_id)   
+    system = get_object_or_404(LectionarySystem, id=system_id)   
+
+    return render(request, 'dcodex_lectionary/affiliation_lections_list.html', {'affiliation': affiliation, 'system': system, } )
+
+
+@login_required
 def toggle_affiliation_lection(request):
     request_dict = get_request_dict(request)
 
@@ -243,3 +251,5 @@ def toggle_affiliation_lection(request):
     else:
         affiliation.lections.add(lection)
     return HttpResponse("OK")
+
+
