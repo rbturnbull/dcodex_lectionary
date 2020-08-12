@@ -296,7 +296,7 @@ class FixedDate(models.Model):
     """
     A liturgical day that corresponds to a fixed date in the calendar.
     
-    Because DateTime fields in Django need to ba for a particular year, the year chosen was 1003 for September to December and 1004 for January to August. This year was chosen simply because 1004 is a leap year and so includes February 29.
+    Because DateTime fields in Django need to be for a particular year, the year chosen was 1003 for September to December and 1004 for January to August. This year was chosen simply because 1004 is a leap year and so includes February 29.
     """
     
     description = models.CharField(max_length=100)
@@ -959,6 +959,14 @@ class Lectionary( Manuscript ):
     def transcriptions_in_lections_dict( self, **kwargs ):
         return { transcription.verse.bible_verse.id : transcription.transcription for transcription in self.transcriptions_in_lections( **kwargs ) }
     
+    def transcription( self, verse ):
+        if type(verse) == LectionaryVerse:
+            return super().transcription(verse)
+        if type(verse) == BibleVerse:
+            lectionary_verse = self.verse_class().objects.filter(bible_verse=verse).first()        # HACK This will give the first version, not necessarily the one we want!
+            return super().transcription(lectionary_verse)
+
+        return None
 
     def similarity_lection( self, lection, comparison_mss, similarity_func=distance.similarity_levenshtein, ignore_incipits=False ):
 
@@ -1371,10 +1379,29 @@ class AffiliationLectionarySystem(AffiliationBase):
         If the verse is of type BibleVerse, then it is active if the active lections have a mapping to that verse.
         """
         if isinstance( verse, LectionaryVerse ):
-            return self.system.lections.filter( verses__id=verse.id ).exclude(id__in=self.exclude.values_list( 'id', flat=True )).exists()
+            return self.lections().filter( verses__id=verse.id ).exists()
         elif isinstance( verse, BibleVerse ):
-            return self.system.lections.filter( verses__bible_verse__id=verse.id ).exclude(id__in=self.exclude.values_list( 'id', flat=True )).exists()
+            return self.lections().filter( verses__bible_verse__id=verse.id ).exists()
         return False
+
+    def lections(self):
+        """ All the lections that are included in this affiliation. """
+        return self.system.lections.exclude(id__in=self.exclude.values_list( 'id', flat=True ))
+
+    def manuscript_and_verse_ids_at( self, verse ):
+        if isinstance( verse, LectionaryVerse ):
+            return super().manuscript_and_verse_ids_at( verse )
+        
+        manuscript_ids = self.manuscript_ids_at(verse)
+        pairs = set()
+
+        if len(manuscript_ids) > 0:
+            verses = LectionaryVerse.objects( bible_verse=verse, lection__in=self.lections())
+            logging.error(f"LECTIONARY VERSES {verses}")
+            for lectionary_verse in verses:
+                pairs.update( {(manuscript_id, lectionary_verse.id) for manuscript_id in manuscript_ids} )
+
+        return pairs
 
 
 class AffiliationLections(AffiliationBase):
@@ -1389,6 +1416,21 @@ class AffiliationLections(AffiliationBase):
             return self.lections.filter( verses__bible_verse__id=verse.id ).exists()
         return False
 
+    def manuscript_and_verse_ids_at( self, verse ):
+        if isinstance( verse, LectionaryVerse ):
+            return super().manuscript_and_verse_ids_at( verse )
+        
+        manuscript_ids = self.manuscript_ids_at(verse)
+        pairs = set()
+
+        if len(manuscript_ids) > 0:
+            verses = LectionaryVerse.objects( bible_verse=verse, lection__in=self.lections)
+            logging.error(f"LECTIONARY VERSES {verses}")
+            for lectionary_verse in verses:
+                pairs.update( {(manuscript_id, verse.id) for manuscript_id in manuscript_ids} )
+
+        return pairs
+        
     def add_lections( self, lections ):
         """ Adds an iterable of lections to this affiliation object. They can be Lection objects or strings with unique descriptions of the lections. """
         for lection in lections:
