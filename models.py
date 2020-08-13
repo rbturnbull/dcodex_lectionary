@@ -1396,8 +1396,7 @@ class AffiliationLectionarySystem(AffiliationBase):
         pairs = set()
 
         if len(manuscript_ids) > 0:
-            verses = LectionaryVerse.objects( bible_verse=verse, lection__in=self.lections())
-            logging.error(f"LECTIONARY VERSES {verses}")
+            verses = LectionaryVerse.objects.filter( bible_verse=verse, lection__in=self.lections())
             for lectionary_verse in verses:
                 pairs.update( {(manuscript_id, lectionary_verse.id) for manuscript_id in manuscript_ids} )
 
@@ -1424,10 +1423,9 @@ class AffiliationLections(AffiliationBase):
         pairs = set()
 
         if len(manuscript_ids) > 0:
-            verses = LectionaryVerse.objects( bible_verse=verse, lection__in=self.lections)
-            logging.error(f"LECTIONARY VERSES {verses}")
+            verses = LectionaryVerse.objects.filter( bible_verse=verse, lection__in=self.lections.all())
             for lectionary_verse in verses:
-                pairs.update( {(manuscript_id, verse.id) for manuscript_id in manuscript_ids} )
+                pairs.update( {(manuscript_id, lectionary_verse.id) for manuscript_id in manuscript_ids} )
 
         return pairs
         
