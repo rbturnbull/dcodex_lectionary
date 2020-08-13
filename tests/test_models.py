@@ -144,4 +144,43 @@ class AffiliationLectionsTests(TestCase):
         self.assertEqual( len(pairs), 0 )
 
 
-    
+class AffiliationLectionarySystemTests(TestCase):
+    def setUp(self):
+        self.ms = Manuscript(name="Test Lectionary")
+        self.ms.save()        
+        self.system = LectionarySystem(name="Test Lectionary System")
+        self.system.save()
+        self.family1 = Family(name="Test Family 1")
+        self.family1.save()
+
+        easter_lection = make_easter_lection()
+        great_saturday_lection = make_great_saturday_lection()
+
+        self.system.lections.add( easter_lection )
+
+
+        affiliation = AffiliationLectionarySystem( name="Test AffiliationLectionarySystem", system=self.system )
+        affiliation.save()
+        affiliation.families.add( self.family1 )
+        affiliation.manuscripts.add( self.ms )
+        affiliation.save()
+
+    def test_manuscript_and_verse_ids_at(self):
+        bible_verse = BibleVerse.get_from_string( "Jn 1:1" )
+        pairs = list(self.family1.manuscript_and_verse_ids_at( bible_verse ))
+        self.assertEqual( len(pairs), 1 )
+        manuscript_id = pairs[0][0]
+        verse_id = pairs[0][1]
+        self.assertEqual( manuscript_id, self.ms.id )
+        found_verse = Verse.objects.get(id=verse_id)
+        self.assertEqual( manuscript_id, self.ms.id )
+        self.assertIs(type(found_verse), LectionaryVerse)
+        self.assertEqual(found_verse.bible_verse.id, bible_verse.id)
+
+    def test_manuscript_and_verse_ids_at_none(self):
+        bible_verse = BibleVerse.get_from_string( "Mt 28:1" )
+        pairs = list(self.family1.manuscript_and_verse_ids_at( bible_verse ))
+        self.assertEqual( len(pairs), 0 )
+
+
+        
