@@ -1367,52 +1367,23 @@ class Lectionary( Manuscript ):
             print( ms_siglum, df[ms_siglum+'_similarity'].mean() )
 
         print(ms_df.shape)
-                
-class AffiliationLectionarySystem(AffiliationBase):
-    """ An Affiliation class which is active for all lections in a lectionary system (unless specified in an exclusion list). """    
-    system = models.ForeignKey(LectionarySystem, on_delete=models.CASCADE)
-    exclude = models.ManyToManyField(Lection, blank=True, help_text="All the lections at which this affiliation object is not active.")
-
-    def is_active( self, verse ):
-        """ This affiliation is active whenever the verse is in the lectionary system (unles in the list of excluded lections)
-        
-        If the verse is of type BibleVerse, then it is active if the active lections have a mapping to that verse.
-        """
-        if isinstance( verse, LectionaryVerse ):
-            return self.lections().filter( verses__id=verse.id ).exists()
-        elif isinstance( verse, BibleVerse ):
-            return self.lections().filter( verses__bible_verse__id=verse.id ).exists()
-        return False
-
-    def lections(self):
-        """ All the lections that are included in this affiliation. """
-        return self.system.lections.exclude(id__in=self.exclude.values_list( 'id', flat=True ))
-
-    def manuscript_and_verse_ids_at( self, verse ):
-        if isinstance( verse, LectionaryVerse ):
-            return super().manuscript_and_verse_ids_at( verse )
-        
-        manuscript_ids = self.manuscript_ids_at(verse)
-        pairs = set()
-
-        if len(manuscript_ids) > 0:
-            verses = LectionaryVerse.objects.filter( bible_verse=verse, lection__in=self.lections())
-            for lectionary_verse in verses:
-                pairs.update( {(manuscript_id, lectionary_verse.id) for manuscript_id in manuscript_ids} )
-
-        return pairs
 
 
-class AffiliationLections(AffiliationBase):
-    """ An Affiliation class which is active only in certain lections. """    
-    lections = models.ManyToManyField(Lection, blank=True, help_text="All the lections at which this affiliation object is active.")
+class AffiliationLectionsSet(AffiliationBase):
+    """ An abstract Affiliation class which is active only in certain lections which is defined by a function. """    
+    class Meta:
+        abstract = True
+    
+    def lections_where_active( self ):
+        """ This needs to be set by child class """
+        raise NotImplementedError
     
     def is_active( self, verse ):
         """ This affiliation is active whenever the verse is in the lection. If the verse is of type BibleVerse, then it is active if the lections have a mapping to that verse. """
         if isinstance( verse, LectionaryVerse ):
-            return self.lections.filter( verses__id=verse.id ).exists()
+            return self.lections_where_active().filter( verses__id=verse.id ).exists()
         elif isinstance( verse, BibleVerse ):
-            return self.lections.filter( verses__bible_verse__id=verse.id ).exists()
+            return self.lections_where_active().filter( verses__bible_verse__id=verse.id ).exists()
         return False
 
     def manuscript_and_verse_ids_at( self, verse ):
@@ -1423,25 +1394,16 @@ class AffiliationLections(AffiliationBase):
         pairs = set()
 
         if len(manuscript_ids) > 0:
-            verses = LectionaryVerse.objects.filter( bible_verse=verse, lection__in=self.lections.all())
+            verses = LectionaryVerse.objects.filter( bible_verse=verse, lection__in=self.lections_where_active())
             for lectionary_verse in verses:
                 pairs.update( {(manuscript_id, lectionary_verse.id) for manuscript_id in manuscript_ids} )
 
         return pairs
-        
-    def add_lections( self, lections ):
-        """ Adds an iterable of lections to this affiliation object. They can be Lection objects or strings with unique descriptions of the lections. """
-        for lection in lections:
-            if isinstance(lection, str):
-                lection = Lection.objects.filter(description=lection).first()
-            if lection and isinstance( lection, Lection ):
-                self.lections.add(lection)
-        self.save()
-                
+                        
     def distinct_bible_verses(self):
         """ Returns a set of all the distinct verses from the lections of this affiliation object. """
         distinct_verses = set()
-        for lection in self.lections.all():
+        for lection in self.lections_where_active():
             distinct_verses.update([v.bible_verse for v in lection.verses.all()])
         return distinct_verses
         
@@ -1456,8 +1418,37 @@ class AffiliationLections(AffiliationBase):
         This may include verses multiple times.
         """
         count = 0
-        for lection in self.lections.all():
+        for lection in self.lections_where_active():
             count += lection.verses.count() # This should be done with an aggregation function in django
         return count
+                
+
+class AffiliationLectionarySystem(AffiliationLectionsSet):
+    """ An Affiliation class which is active for all lections in a lectionary system (unless specified in an exclusion list). """    
+    system = models.ForeignKey(LectionarySystem, on_delete=models.CASCADE)
+    exclude = models.ManyToManyField(Lection, blank=True, help_text="All the lections at which this affiliation object is not active.")
+
+    def lections_where_active(self):
+        """ All the lections that are included in this affiliation. """
+        return self.system.lections.exclude(id__in=self.exclude.values_list( 'id', flat=True ))
+
+
+class AffiliationLections(AffiliationLectionsSet):
+    """ An Affiliation class which is active only in certain lections. """    
+    lections = models.ManyToManyField(Lection, blank=True, help_text="All the lections at which this affiliation object is active.")
+    
+    def lections_where_active(self):
+        """ All the lections that are included in this affiliation. """
+        return self.lections.all()
+
+    def add_lections( self, lections ):
+        """ Adds an iterable of lections to this affiliation object. They can be Lection objects or strings with unique descriptions of the lections. """
+        for lection in lections:
+            if isinstance(lection, str):
+                lection = Lection.objects.filter(description=lection).first()
+            if lection and isinstance( lection, Lection ):
+                self.lections.add(lection)
+        self.save()
+                
                 
     
