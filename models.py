@@ -999,7 +999,7 @@ class Lectionary( Manuscript ):
         return averages
 
     def similarity_probabilities_lection( self, lection, comparison_mss, weights, gotoh_param, prior_log_odds=0.0, ignore_incipits=False ):
-        gotoh_counts = np.zeros( (len(comparison_mss),4), dtype=np.int32 )   
+        gotoh_totals = np.zeros( (len(comparison_mss),4), dtype=np.int32 )   
         weights = np.asarray(weights)  
         
         for verse_index, verse in enumerate(lection.verses.all()):
@@ -1015,13 +1015,13 @@ class Lectionary( Manuscript ):
                     continue
 
                 counts = gotoh_counts.counts( my_transcription, comparison_transcription, *gotoh_param )
-                gotoh_counts[ms_index][:] += counts
+                gotoh_totals[ms_index][:] += counts
 
         results = []        
         for ms_index in range(len(comparison_mss)):
-            length = gotoh_counts[ms_index].sum()            
-            similarity = 100.0 * gotoh_counts[ms_index][0]/length if length > 0 else np.NAN
-            logodds = prior_log_odds + np.dot( gotoh_counts[ms_index], weights )
+            length = gotoh_totals[ms_index].sum()            
+            similarity = 100.0 * gotoh_totals[ms_index][0]/length if length > 0 else np.NAN
+            logodds = prior_log_odds + np.dot( gotoh_totals[ms_index], weights )
             posterior_probability = expit( logodds )
             
             results.extend([similarity, posterior_probability])
@@ -1366,7 +1366,7 @@ class Lectionary( Manuscript ):
         for index, ms_siglum in enumerate(mss_sigla.keys()):     
             print( ms_siglum, df[ms_siglum+'_similarity'].mean() )
 
-        print(ms_df.shape)
+        print("Number of lections:", ms_df.shape[0])
 
 
 class AffiliationLectionsSet(AffiliationBase):
