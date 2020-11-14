@@ -1,0 +1,23 @@
+asgiref==3.3.1
+beautifulsoup4==4.9.3
+cycler==0.10.0
+-e git+https://github.com/rbturnbull/dcodex.git@3d51fef6afb5b6694e914e62e7a7bc9bd6c531a6#egg=dcodex
+-e git+https://github.com/rbturnbull/dcodex_bible.git@08e84af5edc5b4600ee5ff2a783736dd2acaa194#egg=dcodex_bible
+-e git+https://github.com/rbturnbull/dcodex_lectionary.git@25fc8c578ca088e9626311fb53a97dd19aa1c3eb#egg=dcodex_lectionary
+Django==3.1.3
+django-polymorphic==3.0.0
+-e git+https://github.com/rbturnbull/gotoh_counts.git@16e8542e27aba130755a539dfd90301a29a16242#egg=gotoh_counts_rbturnbull
+kiwisolver==1.3.1
+matplotlib==3.3.3
+numpy==1.19.4
+pandas==1.1.4
+Pillow==8.0.1
+pyparsing==2.4.7
+python-dateutil==2.8.1
+python-Levenshtein==0.12.0
+pytz==2020.4
+pyxDamerauLevenshtein==1.6.1
+scipy==1.5.4
+six==1.15.0
+soupsieve==2.0.1
+sqlparse==0.4.1
