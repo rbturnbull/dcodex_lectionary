@@ -11,7 +11,7 @@ import pandas as pd
 import dcodex.distance as distance
 from collections import defaultdict
 from scipy.special import expit
-import gotoh_counts
+import gotoh
 
 import logging
 
@@ -1014,7 +1014,7 @@ class Lectionary( Manuscript ):
                 if not comparison_transcription:
                     continue
 
-                counts = gotoh_counts.counts( my_transcription, comparison_transcription, *gotoh_param )
+                counts = gotoh.counts( my_transcription, comparison_transcription, *gotoh_param )
                 gotoh_totals[ms_index][:] += counts
 
         results = []        
