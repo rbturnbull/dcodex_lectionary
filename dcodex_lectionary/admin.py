@@ -1,17 +1,58 @@
 from django.contrib import admin
 from polymorphic.admin import PolymorphicParentModelAdmin, PolymorphicChildModelAdmin, PolymorphicChildModelFilter
-from adminsortable2.admin import SortableInlineAdminMixin
+from adminsortable2.admin import SortableInlineAdminMixin, SortableAdminMixin
 
 from .models import *
+
+
+class LectionaryDayChildAdmin(PolymorphicChildModelAdmin):
+    """ Base admin class for all LectionaryDay models """
+    base_model = LectionaryDay  # Optional, explicitly set here.
+
+
+@admin.register(MiscDay)
+class MiscDayAdmin(LectionaryDayChildAdmin):
+    base_model = MiscDay
+    show_in_index = True
+
+
+@admin.register(EothinaDay)
+class EothinaDayAdmin(LectionaryDayChildAdmin):
+    base_model = EothinaDay
+    show_in_index = True
+
+
+@admin.register(FixedDay)
+class FixedDayAdmin(LectionaryDayChildAdmin):
+    base_model = FixedDay
+    show_in_index = True
+
+
+@admin.register(MovableDay)
+class MovableDayAdmin(SortableAdminMixin, LectionaryDayChildAdmin):
+    base_model = MovableDay
+    show_in_index = True
+
+
+@admin.register(LectionaryDay)
+class LectionaryDayParentAdmin(PolymorphicParentModelAdmin):
+    """ The parent LectionaryDay admin """
+    base_model = LectionaryDay  # Optional, explicitly set here.
+    child_models = (MovableDay, FixedDay, EothinaDay, MiscDay)
+    list_filter = (PolymorphicChildModelFilter,)  # This is optional.
+
 
 class LectionaryVerseMembershipInlineSortable(SortableInlineAdminMixin, admin.TabularInline):
     model = Lection.verses.through
     raw_id_fields = ("verse",)    
     extra = 0
+
 class LectionaryVerseMembershipInline(admin.TabularInline):
     model = Lection.verses.through
     raw_id_fields = ("verse",)    
     extra = 0
+
+
 
 
 # Register your models here.

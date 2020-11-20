@@ -3,6 +3,7 @@ from django.db.models import F
 from django.db.models import Max, Min, Sum
 from dcodex.models import Manuscript, Verse, VerseLocation
 from dcodex_bible.models import BibleVerse
+from polymorphic.models import PolymorphicModel
 from dcodex_bible.similarity import * 
 from django.shortcuts import render
 from itertools import chain
@@ -140,30 +141,36 @@ class Lection(models.Model):
             return description
         return description[:max_chars-3] + "..."        
 
+    def days(self):
+        field = 'day'
+        ids = {value[field] for value in LectionInSystem.objects.filter(lection=self).values(field) if value[field]}
+        return LectionaryDay.objects.get(id__in=ids) # Look for a more efficient way to do this query
+
     def dates(self):
-        field = 'fixed_date'
-        ids = {value[field] for value in LectionInSystem.objects.filter(lection=self).values(field) if value[field]}
-        fixed_dates =[FixedDate.objects.get(id=id) for id in ids];
-        
-        field = 'day_of_year'
-        ids = {value[field] for value in LectionInSystem.objects.filter(lection=self).values(field) if value[field]}
-        movable_dates =[DayOfYear.objects.get(id=id) for id in ids];
-        return movable_dates + fixed_dates
-        
-    def description_with_dates( self ):
+        """ Deprecated: Use 'days' """
+        return self.days()
+
+    def description_with_days( self ):
         description = self.description_max_chars()
         
-        dates = self.dates()
-        if len(dates) == 0:
+        days = self.days()
+        if len(days) == 0:
             return description
-        return "%s (%s)" % (description, ", ".join( [str(date) for date in dates] ) )
+        return "%s (%s)" % (description, ", ".join( [str(day) for day in days] ) )
+
+    def description_with_dates( self ):
+        """ Deprecated: Use 'description_with_days' """
+        return self.description_with_days()
+
     def verse_memberships(self):
         return LectionaryVerseMembership.objects.filter( lection=self ).all()
+
     def reset_verse_order(self):
         for verse_order, verse_membership in enumerate(self.verse_memberships()):
             verse_membership.order = verse_order
             verse_membership.save()
 #            print(verse_membership)
+
     def verse_ids(self):
         return LectionaryVerseMembership.objects.filter(lection=self).values_list( 'verse__id', flat=True )
 
@@ -315,6 +322,130 @@ class FixedDate(models.Model):
     class Meta:
         ordering = ('date','description')
 
+
+class LectionaryDay(PolymorphicModel):
+    pass
+
+
+class MiscDay(LectionaryDay):
+    description = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.description
+    
+    class Meta:
+        ordering = ('description',)
+
+
+class EothinaDay(LectionaryDay):
+    rank = models.IntegerField()
+
+    def __str__(self):
+        return f"Eothina {self.rank}"
+
+    class Meta:
+        ordering = ('rank',)
+
+
+class FixedDay(LectionaryDay):
+    """
+    A lectionary day that corresponds to a fixed date in the calendar.
+    
+    Because DateTime fields in Django need to be for a particular year, 
+    the year chosen was 1003 for September to December and 1004 for January to August. 
+    This year was chosen simply because 1004 is a leap year and so includes February 29.
+    """
+    date = models.DateField(default=None,null=True, blank=True)
+    def __str__(self):
+        return self.date.strftime('%b %d')
+
+    @classmethod
+    def get_with_string( cls, date_string ):
+        from dateutil import parser
+        dt = parser.parse( date_string )
+        year = 1003 if dt.month >= 9 else 1004
+        dt = dt.replace(year=year)
+        return cls.objects.filter( date=dt ).first()
+        
+    class Meta:
+        ordering = ('date',)
+
+
+class MovableDay(LectionaryDay):
+    SUNDAY = 0
+    MONDAY = 1
+    TUESDAY = 2
+    WEDNESDAY = 3
+    THURSDAY = 4
+    FRIDAY = 5
+    SATURDAY = 6
+    
+    DAY_CHOICES = [
+        (SUNDAY, 'Sunday'),
+        (MONDAY, 'Monday'),
+        (TUESDAY, 'Tuesday'),
+        (WEDNESDAY, 'Wednesday'),
+        (THURSDAY, 'Thursday'),
+        (FRIDAY, 'Friday'),
+        (SATURDAY, 'Saturday'),
+    ]
+    DAY_ABBREVIATIONS = [
+        (SUNDAY, 'Sun'),
+        (MONDAY, 'Mon'),
+        (TUESDAY, 'Tues'),
+        (WEDNESDAY, 'Wed'),
+        (THURSDAY, 'Th'),
+        (FRIDAY, 'Fri'),
+        (SATURDAY, 'Sat'),
+    ]
+    day_of_week = models.IntegerField(choices=DAY_CHOICES)
+    
+    EASTER = 'E'
+    PENTECOST = 'P'
+    FEAST_OF_THE_CROSS = 'F'
+    LENT = 'L'
+    GREAT_WEEK = 'G'
+    EPIPHANY = 'T'
+    
+    SEASON_CHOICES = [
+        (EASTER, 'Easter'),
+        (PENTECOST, 'Pentecost'),
+        (FEAST_OF_THE_CROSS, 'Feast of the Cross'),
+        (LENT, 'Lent'),
+        (GREAT_WEEK, 'Great Week'),
+        (EPIPHANY, 'Epiphany'),
+    ]
+    season = models.CharField(max_length=1, choices=SEASON_CHOICES)
+    
+    week = models.CharField(max_length=31)
+    weekday_number = models.CharField(max_length=32)    
+    earliest_date = models.CharField(max_length=15) 
+    latest_date = models.CharField(max_length=15) 
+    rank = models.PositiveIntegerField(default=0, blank=False, null=False)
+
+    class Meta:
+        ordering = ('rank','id')
+
+    def description_str( self, abbreviation = False ):
+        day_choices = self.DAY_ABBREVIATIONS if abbreviation else DAY_CHOICES
+        string = "%s: %s" % (self.get_season_display(), day_choices[self.day_of_week][1] )
+        if self.week.isdigit():
+            string += ", Week %s" % (self.week )
+        elif self.week != "Holy Week":
+            string += ", %s" % (self.week )        
+    
+        if abbreviation:
+            string = string.replace("Week", "Wk")
+            string = string.replace("Feast of the Cross", "Cross")
+            string = string.replace(" Fare", "")
+        return string
+
+    def __str__(self):
+        return self.description_str(True)
+        
+        return string
+
+
 class DayOfYear(models.Model):
     SUNDAY = 0
     MONDAY = 1
@@ -361,11 +492,11 @@ class DayOfYear(models.Model):
     ]
     period = models.CharField(max_length=1, choices=PERIOD_CHOICES)
     
-    week = models.CharField(max_length=15)
+    week = models.CharField(max_length=31)
     weekday_number = models.CharField(max_length=32)    
     earliest_date = models.CharField(max_length=15) 
     latest_date = models.CharField(max_length=15) 
-    description = models.CharField(max_length=64)
+    description = models.CharField(max_length=255)
     
     def description_str( self, abbreviation = False ):
         day_choices = self.DAY_ABBREVIATIONS if abbreviation else DAY_CHOICES
@@ -391,9 +522,10 @@ class DayOfYear(models.Model):
 class LectionInSystem(models.Model):
     lection = models.ForeignKey(Lection, on_delete=models.CASCADE, default=None, null=True, blank=True)
     system  = models.ForeignKey('LectionarySystem', on_delete=models.CASCADE)
-    day_of_year = models.ForeignKey(DayOfYear, on_delete=models.CASCADE, default=None, null=True, blank=True)
-    fixed_date = models.ForeignKey(FixedDate, on_delete=models.CASCADE, default=None, null=True, blank=True)
-    order_on_day = models.IntegerField(default=0)
+    day_of_year = models.ForeignKey(DayOfYear, on_delete=models.CASCADE, default=None, null=True, blank=True) # Deprecated 
+    fixed_date = models.ForeignKey(FixedDate, on_delete=models.CASCADE, default=None, null=True, blank=True) # Deprecated 
+    day = models.ForeignKey(LectionaryDay, on_delete=models.CASCADE, default=None, null=True, blank=True)
+    order_on_day = models.IntegerField(default=0) # Deprecated
     cumulative_mass_lections = models.IntegerField(default=-1) # The mass of all the previous lections until the start of this one
     order = models.IntegerField(default=0)
     reference_text_en = models.TextField(default="", blank=True)
@@ -410,9 +542,8 @@ class LectionInSystem(models.Model):
         return LectionInSystem.objects.get_or_create(
                     system=new_system, 
                     lection=self.lection, 
-                    day_of_year=self.day_of_year, 
                     order=self.order,
-                    fixed_date=self.fixed_date,
+                    day=self.day,
                     cumulative_mass_lections=self.cumulative_mass_lections,
                     incipit=self.incipit,
                     reference_text_en=self.reference_text_en,
@@ -420,15 +551,9 @@ class LectionInSystem(models.Model):
                 )    
         
     def day_description(self):
-        if self.day_of_year:
-            if self.order_on_day < 2:
-                return str(self.day_of_year)
-            return "%s %d" % (str(self.day_of_year), self.order_on_day)
-        elif self.fixed_date:
-            if self.order_on_day < 2:
-                return str(self.fixed_date)
-            return "%s %d" % (str(self.fixed_date), self.order_on_day)
-        return ""
+        if self.order_on_day < 2:
+            return str(self.day)
+        return "%s (%d)" % (str(self.day), self.order_on_day)
         
     def description(self):
         return "%s. %s" % (self.day_description(), str(self.lection) )
@@ -444,7 +569,7 @@ class LectionInSystem(models.Model):
         return description[:max_chars-3] + "..."        
     
     class Meta:
-        ordering = ('order','fixed_date', 'day_of_year', 'order_on_day',)
+        ordering = ('order', 'day', 'order_on_day',)
         
     def prev(self):
         return self.system.prev_lection_in_system( self )
@@ -477,27 +602,26 @@ class LectionarySystem(models.Model):
         self.reset_order()
         self.calculate_masses()
         
-    def find_day( self, **kwargs ):
-        day = DayOfYear.objects.filter(**kwargs).first()
+    def find_movable_day( self, **kwargs ):
+        day = MovableDay.objects.filter(**kwargs).first()
         print('Day:', day)
         if day:
-            return LectionInSystem.objects.filter(system=self, day_of_year=day).first()
+            return LectionInSystem.objects.filter(system=self, day=day).first()
         return None
-    def find_date( self, last=False, **kwargs ):
-        memberships = self.find_date_all(**kwargs)
+
+    def find_fixed_day( self, last=False, **kwargs ):
+        memberships = self.find_fixed_day_all(**kwargs)
         if not memberships:
             return None
         if last:
             return memberships.last()
         return memberships.first()
 
-    def find_date_all( self, **kwargs ):
-        date = FixedDate.objects.filter(**kwargs).first()
+    def find_fixed_day_all( self, **kwargs ):
+        date = FixedDay.objects.filter(**kwargs).first()
         if date:
-            return LectionInSystem.objects.filter(system=self, fixed_date=date).all()
+            return LectionInSystem.objects.filter(system=self, day=date).all()
         return None
-        
-            
         
     def reset_order(self):
         lection_memberships = self.lections_in_system()
@@ -568,57 +692,39 @@ class LectionarySystem(models.Model):
         lection = self.lection_for_verse( verse )
         return self.lectioninsystem_set.filter( lection=lection ).first()
         
-    def add_lection( self, day_of_year, lection ):
-        membership, created = LectionInSystem.objects.get_or_create(system=self, lection=lection, day_of_year=day_of_year)    
-        membership.save()
-        return membership
-    
     def get_max_order( self ):
         return self.lections_in_system().aggregate(Max('order')).get('order__max')
     
-    def add_menologion_lection( self, fixed_date, lection ):
-        membership, created = LectionInSystem.objects.get_or_create(system=self, lection=lection, fixed_date=fixed_date)    
+    def add_lection( self, day, lection ):
+        membership, created = LectionInSystem.objects.get_or_create(system=self, lection=lection, day=day)    
         if created == True:
             max_order = self.get_max_order()
             membership.order = max_order + 1
         membership.save()
         return membership
-    
       
-    def add_lection_from_description( self, day_of_year, lection_description ):
+    def add_lection_from_description( self, day, lection_description ):
         lection, created = Lection.objects.get_or_create(description=lection_description)
-        return self.add_lection( day_of_year, lection )
-        
-    def add_menologion_lection_from_description( self, fixed_date, lection_description ):
-        lection, created = Lection.objects.get_or_create(description=lection_description)
-        return self.add_menologion_lection( fixed_date, lection )
-        
-    def add_new_lection_from_description( self, day_of_year, lection_description, start_verse_string, end_verse_string, lection_descriptions_with_verses=[], create_verses=False ):        
+        return self.add_lection( day, lection )
+                
+    def add_new_lection_from_description( self, day, lection_description, start_verse_string, end_verse_string, lection_descriptions_with_verses=[], create_verses=False ):        
         lection = Lection.update_or_create_from_description(description=lection_description, start_verse_string=start_verse_string, end_verse_string=end_verse_string, lection_descriptions_with_verses=lection_descriptions_with_verses, create_verses=create_verses)    
-        return self.add_lection( day_of_year, lection )
+        return self.add_lection( day, lection )
        
-    def add_new_menologion_lection_from_passages_string( self, fixed_date, passages_string, **kwargs ):        
+    def add_new_lection_from_passages_string( self, day, passages_string, **kwargs ):        
         lection = Lection.update_or_create_from_passages_string(passages_string=passages_string, **kwargs)    
-        return self.add_menologion_lection( fixed_date, lection )
+        return self.add_lection( day, lection )
        
-    def delete_all_on_day( self, day_of_year ):
-        print("Deleting all on Day of year:", day_of_year )
-        lection_memberships = LectionInSystem.objects.filter(system=self, day_of_year=day_of_year).delete()
-    def delete_all_on_fixed_date( self, fixed_date ):
-        print("Deleting all on Day of year:", fixed_date )
-        lection_memberships = LectionInSystem.objects.filter(system=self, fixed_date=fixed_date).delete()
+    def delete_all_on_day( self, day ):
+        print("Deleting all on Day of year:", day )
+        lection_memberships = LectionInSystem.objects.filter(system=self, day=day).delete()
             
-    def replace_with_lection( self, day_of_year, lection ):
-        self.delete_all_on_day( day_of_year )
+    def replace_with_lection( self, day, lection ):
+        self.delete_all_on_day( day )
         print("Adding:", lection)
-        return self.add_lection( day_of_year, lection )
+        return self.add_lection( day, lection )
         
-    def replace_with_menologion_lection( self, fixed_date, lection ):
-        self.delete_all_on_fixed_date( fixed_date )
-        print("Adding:", lection)
-        return self.add_menologion_lection( fixed_date, lection )
-        
-    def insert_lection( self, date, lection, insert_after=None ):
+    def insert_lection( self, day, lection, insert_after=None ):
         order = None
         if insert_after is not None:
             insert_after_membership = LectionInSystem.objects.filter(system=self, lection=insert_after).first()
@@ -634,15 +740,14 @@ class LectionarySystem(models.Model):
             print('system  ', self )
             return None
 
-        #logging.error( "fixed_date = %s [%s]" % (str(date), type(date) ) )
-        membership = self.add_menologion_lection( date, lection )        
+        membership = self.add_lection( day, lection )        
         membership.order = order
         membership.save()
         return membership
         
-    def replace_with_new_lection_from_description( self, day_of_year, lection_description, start_verse_string, end_verse_string, lection_descriptions_with_verses=[], create_verses=False ):        
+    def replace_with_new_lection_from_description( self, day, lection_description, start_verse_string, end_verse_string, lection_descriptions_with_verses=[], create_verses=False ):        
         lection = Lection.update_or_create_from_description(description=lection_description, start_verse_string=start_verse_string, end_verse_string=end_verse_string, lection_descriptions_with_verses=lection_descriptions_with_verses, create_verses=create_verses)    
-        self.replace_with_lection( day_of_year, lection )
+        self.replace_with_lection( day, lection )
         return lection
 
     def empty( self ):
@@ -656,7 +761,7 @@ class LectionarySystem(models.Model):
     
     def clone_to_system_synaxarion( self, new_system ):
         new_system.empty()
-        for lection_membership in LectionInSystem.objects.filter( system=self, fixed_date=None ).all():
+        for lection_membership in LectionInSystem.objects.filter( system=self, day__in=MovableDay.objects.all() ).all():  # There should be a more efficient way to do this query
             lection_membership.clone_to_system( new_system )
     
     def clone_to_system_with_name(self, new_system_name ):
@@ -1291,10 +1396,7 @@ class Lectionary( Manuscript ):
             
                 print( 'looking for:', membership.id, membership )
                 x = df.index[ df['Lection_Membership__id'] == membership.id ].values.item()
-                if membership.day_of_year:
-                    description = str(membership.day_of_year)
-                else:
-                    description = str(membership.fixed_date)            
+                description = str(membership.day)
 
             if annotations_spaces_to_lines:
                 description = description.replace( ' ', "\n" )
@@ -1325,10 +1427,7 @@ class Lectionary( Manuscript ):
                     continue
             
                 annotation_x = df.index[ df['Lection_Membership__id'] == annotation.id ].item()
-                if annotation.day_of_year:
-                    annotation_description = str(annotation.day_of_year)
-                else:
-                    annotation_description = str(annotation.fixed_date)            
+                annotation_description = str(annotation.day)            
 
             if annotations_spaces_to_lines:
                 annotation_description = annotation_description.replace( ' ', "\n" )
