@@ -6,6 +6,8 @@ from dcodex_bible.models import BibleVerse
 from polymorphic.models import PolymorphicModel
 from dcodex_bible.similarity import * 
 from django.shortcuts import render
+from lxml import etree
+
 from itertools import chain
 import numpy as np
 import pandas as pd
@@ -586,18 +588,24 @@ class LectionInSystem(models.Model):
 class LectionarySystem(models.Model):
     name = models.CharField(max_length=200)
     lections = models.ManyToManyField(Lection, through=LectionInSystem)
+
     def __str__(self):
         return self.name   
+
     def first_lection_in_system(self):
-        return self.lections_in_system().first()         
+        return self.lections_in_system().first()  
+
     def last_lection_in_system(self):
-        return self.lections_in_system().last()         
+        return self.lections_in_system().last()  
+
     def first_lection(self):
         first_lection_in_system = self.first_lection_in_system()
         return first_lection_in_system.lection
+
     def first_verse(self):
         first_lection = self.first_lection()
         return first_lection.first_verse()
+
     def maintenance(self):
         self.reset_order()
         self.calculate_masses()
@@ -891,6 +899,45 @@ class Lectionary( Manuscript ):
         
 #        return list(chain(lectionary_comparisons, continuous_text_comparisons))
         return list(chain(lectionary_comparisons, lectionary_comparisons_same_bible_verse.all(), continuous_text_comparisons))        
+
+    # Override
+    def accordance(self):
+        """ Returns a string formatted as an Accordance User Bible """
+        user_bible = ""
+        
+        # Loop over all transcriptions and put them in a dictionary based on the bible verse
+        bible_verse_to_transcriptions_dict = defaultdict(list)
+        for transcription in self.transcriptions():
+            transcription_clean = transcription.remove_markup()
+            if transcription.verse.bible_verse:
+                bible_verse_to_transcriptions_dict[transcription.verse.bible_verse].append(transcription_clean)
+
+        # Loop over the distinct Bible verses in order
+        bible_verses = sorted(bible_verse_to_transcriptions_dict.keys(), key=lambda bible_verse: bible_verse.id) 
+        for bible_verse in bible_verses:
+            transcriptions_txt = " | ".join(bible_verse_to_transcriptions_dict[bible_verse])
+            user_bible += f"{bible_verse} <color=black></color>{transcriptions_txt}<br>\n"
+
+        return user_bible
+
+    def tei_element_text( self, ignore_headings=True ):
+        text = etree.Element("text")
+        body  = etree.SubElement(text, "body")
+        for membership in self.system.lectioninsystem_set.all():
+            lection_div  = etree.SubElement(body, "div", type="lection", n=membership.description() )
+            for verse_index, verse in enumerate(membership.lection.verses.all()):
+                if not verse.bible_verse:
+                    continue
+                
+                transcription = self.transcription( verse )
+                if transcription:
+                    verse_tei_id = transcription.verse.bible_verse.tei_id()
+                    tei_text = transcription.tei()
+                    # ab = etree.SubElement(body, "ab", n=verse_tei_id)
+                    ab = etree.fromstring( f'<ab n="{verse_tei_id}">{tei_text}</ab>' )
+                    lection_div.append(ab)
+
+        return text
 
     def next_verse( self, verse, lection_in_system = None ):
         if lection_in_system == None:
@@ -1498,7 +1545,7 @@ class AffiliationLectionsSet(AffiliationBase):
                 pairs.update( {(manuscript_id, lectionary_verse.id) for manuscript_id in manuscript_ids} )
 
         return pairs
-                        
+
     def distinct_bible_verses(self):
         """ Returns a set of all the distinct verses from the lections of this affiliation object. """
         distinct_verses = set()
