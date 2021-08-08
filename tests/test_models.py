@@ -1,3 +1,4 @@
+from pathlib import Path
 from django.test import TestCase
 
 #from model_bakery import baker
@@ -9,7 +10,8 @@ from dcodex_lectionary.models import *
 def make_easter_lection():
     start_rank = book_names.index('John') * 100
     bible_verses = [BibleVerse(book=book_names.index('John'), chapter=1, verse=i, rank=start_rank+i) for i in range(1,17+1)]
-    for verse in bible_verses: verse.save()
+    for verse in bible_verses: 
+        verse.save()
     
     lection = Lection.update_or_create_from_passages_string( "Jn 1:1–17", create_verses=True)
     return lection
@@ -183,4 +185,46 @@ class AffiliationLectionarySystemTests(TestCase):
         self.assertEqual( len(pairs), 0 )
 
 
+class MovableDayTests(TestCase):
+    def test_read_season(self):
+        self.assertEquals( MovableDay.read_season("Easter"), MovableDay.EASTER )
+        self.assertEquals( MovableDay.read_season("EAST"), MovableDay.EASTER )
+        self.assertEquals( MovableDay.read_season("Pent"), MovableDay.PENTECOST )
+        self.assertEquals( MovableDay.read_season("Pentecost"), MovableDay.PENTECOST )
+        self.assertEquals( MovableDay.read_season("Feast"), MovableDay.FEAST_OF_THE_CROSS )
+        self.assertEquals( MovableDay.read_season("Great Week "), MovableDay.GREAT_WEEK )
+        self.assertEquals( MovableDay.read_season("L"), MovableDay.LENT )
+        self.assertEquals( MovableDay.read_season("EPIPH"), MovableDay.EPIPHANY )
+        self.assertEquals( MovableDay.read_season("Theophany"), MovableDay.EPIPHANY )
+        self.assertEquals( MovableDay.read_season("cross"), MovableDay.FEAST_OF_THE_CROSS )
+
+    def test_read_season(self):
+        self.assertEquals( MovableDay.read_day_of_week("Sunday"), MovableDay.SUNDAY )
+
+
+class LectionarySystemTests(TestCase):
+    def setUp(self):
+        self.system = LectionarySystem(name="Test Lectionary System")
+        self.system.save()
+
+    def test_import_from_csv_incomplete(self):
+        csv = Path(__file__).parent/"testdata/test-system-incomplete.csv"
+        with self.assertRaises(ValueError):
+            self.system.import_from_csv( csv )
         
+    def test_import_from_csv_incorrect_date(self):
+        csv = Path(__file__).parent/"testdata/test-system-incorrect-date.csv"
+        with self.assertRaises(ValueError):
+            self.system.import_from_csv( csv )
+        
+    def test_import_from_csv(self):
+        # Create Days
+        MovableDay.objects.update_or_create( season=MovableDay.EASTER, week=1, day_of_week=MovableDay.SUNDAY )
+        MovableDay.objects.update_or_create( season=MovableDay.GREAT_WEEK, week=1, day_of_week=MovableDay.SATURDAY )
+
+        make_easter_lection()
+        make_great_saturday_lection()
+        csv = Path(__file__).parent/"testdata/test-system.csv"
+        self.system.import_from_csv( csv )
+
+        self.assertEquals( self.system.lections.count(), 2 )

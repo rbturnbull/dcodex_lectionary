@@ -7,6 +7,11 @@ SECRET_KEY = 'akfjnakfcjaldunfkhaldfhalshf'
 INSTALLED_APPS = [
     'django.contrib.auth',
     "django.contrib.contenttypes",
+    "adminsortable2",
+    'easy_thumbnails',
+    'filer',
+    'mptt',
+    'imagedeck',
     'polymorphic',    
     "dcodex",
     "dcodex_bible",

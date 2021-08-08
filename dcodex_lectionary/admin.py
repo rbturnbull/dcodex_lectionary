@@ -2,6 +2,7 @@ from django.contrib import admin
 from polymorphic.admin import PolymorphicParentModelAdmin, PolymorphicChildModelAdmin, PolymorphicChildModelFilter
 from adminsortable2.admin import SortableInlineAdminMixin, SortableAdminMixin
 
+from dcodex.admin import ManuscriptChildAdmin
 from .models import *
 
 
@@ -100,4 +101,7 @@ class LectionarySystemAdmin(admin.ModelAdmin):
 #    inlines = [LectionInSystemInline]
     inlines = [LectionInSystemInlineSortable]
 
-admin.site.register(Lectionary)
+
+@admin.register(Lectionary)    
+class LectionaryAdmin(ManuscriptChildAdmin):
+    pass

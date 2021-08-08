@@ -247,7 +247,6 @@ class Lection(models.Model):
                 
             self.verses.add(lectionary_verse)
         self.save()    
-    
 
     @classmethod
     def update_or_create_from_description( cls, description, start_verse_string, end_verse_string, lection_descriptions_with_verses=[], create_verses=False ):
@@ -258,7 +257,8 @@ class Lection(models.Model):
         lection.verses.clear()  
         lection.add_verses_from_range( start_verse_string, end_verse_string, lection_descriptions_with_verses, create_verses )
     
-        return lection    
+        return lection 
+
     @classmethod
     def update_or_create_from_passages_string( cls, passages_string, lection_descriptions_with_verses=[], create_verses=False ):
         lection, created = cls.objects.get_or_create(description=passages_string)
@@ -268,6 +268,7 @@ class Lection(models.Model):
         lection.verses.clear()  
         lection.add_verses_from_passages_string( passages_string, overlapping_lection_descriptions=lection_descriptions_with_verses, create_verses=create_verses )
         return lection    
+
     @classmethod
     def create_from_passages_string( cls, passages_string, **kwargs ):
         lection = cls(description=passages_string)
@@ -445,10 +446,29 @@ class MovableDay(LectionaryDay):
     def __str__(self):
         return self.description_str(True)
         
-        return string
+    @classmethod   
+    def read_season(cls, target):
+        target = target.lower().strip()
+        for season, season_string in cls.SEASON_CHOICES:
+            if season_string.lower().startswith(target):
+                return season
+        if target.startswith("cross"):
+            return cls.FEAST_OF_THE_CROSS
+        if target.startswith("theoph"):
+            return cls.EPIPHANY
+        return None
+    
+    @classmethod
+    def read_day_of_week(cls, target):
+        target = target.lower().strip()
+        for day, day_abbreviation in cls.DAY_ABBREVIATIONS:
+            if target.startswith(day_abbreviation.lower()):
+                return day
+        return None
 
 
 class DayOfYear(models.Model):
+    "DEPRECATED. See Moveable Day."
     SUNDAY = 0
     MONDAY = 1
     TUESDAY = 2
@@ -513,14 +533,22 @@ class DayOfYear(models.Model):
             string = string.replace("Feast of the Cross", "Cross")
             string = string.replace(" Fare", "")
         return string
+
     def __str__(self):
         return self.description_str(True)
         
-        return string
     class Meta:
-        verbose_name_plural = 'Days of year'        
+        verbose_name_plural = 'Days of year'     
 
-    
+    @classmethod   
+    def read_period(cls, target):
+        target = target.lower().strip()
+        for period, period_string in cls.PERIOD_CHOICES:
+            if period_string.lower().startswith(target):
+                return period
+        return None
+
+
 class LectionInSystem(models.Model):
     lection = models.ForeignKey(Lection, on_delete=models.CASCADE, default=None, null=True, blank=True)
     system  = models.ForeignKey('LectionarySystem', on_delete=models.CASCADE)
@@ -643,7 +671,42 @@ class LectionarySystem(models.Model):
 
     def lections_in_system_min_verses(self, min_verses=2):
         return [m for m in self.lections_in_system().all() if m.lection.verses.count() >= min_verses]
-                        
+
+    def import_from_csv(self, csv, replace=False, create_verses=True):
+        """ 
+        Reads a CSV and lections from it into this lectionary system.
+
+        The CSV file must have columns corresponding to 'season', 'week', 'day', 'passage', 'parallels' (optional).
+        """
+        df = pd.read_csv(csv)
+        required_columns = ['season', 'week', 'day', 'passage']
+        for required_column in required_columns:
+            if not required_column in df.columns:
+                raise ValueError(f"No column named '{required_column}' in {df.columns}.")
+
+        for _, row in df.iterrows():
+            season = MovableDay.read_season(row['season'])
+            week = row['week']
+            day_of_week = MovableDay.read_day_of_week(row['day'])
+            day_of_year = MovableDay.objects.filter( season=season, week=week, day_of_week=day_of_week ).first()
+            if not day_of_year:
+                raise ValueError(f"Cannot find day for row\n{row}")
+            
+            if "parallels" in row and not pd.isna(row["parallels"]):
+                parallels = row["parallels"].split("|")
+            else:
+                parallels = []
+
+            lection = Lection.update_or_create_from_passages_string( 
+                row["passage"], 
+                lection_descriptions_with_verses=parallels, 
+                create_verses=create_verses,
+            )
+
+            if replace:
+                self.replace_with_lection(day_of_year, lection)
+            else:
+                self.add_lection( day_of_year, lection )
         
     def next_lection_in_system(self, lection_in_system):
         found = False
