@@ -20,3 +20,4 @@ scipy==1.5.4
 six==1.15.0
 soupsieve==2.0.1
 sqlparse==0.4.1
+coverage==5.5
