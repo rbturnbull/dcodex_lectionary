@@ -1,5 +1,6 @@
 # dcodex_lectionary
-`Extension for D-Codex to use lectionaries`
+Extension for D-Codex to use lectionaries
+![pipline](https://github.com/rbturnbull/dcodex_lectionary/actions/workflows/coverage.yml/badge.svg)
 
 ## Installation
 
