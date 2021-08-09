@@ -80,9 +80,9 @@ Django = ">3"
 django-admin-sortable2 = "*"
 django-filer = "*"
 django-guardian = "*"
-django-imagedeck = "branch master"
+django-imagedeck = {git = "https://gitlab.unimelb.edu.au/rturnbull/django-imagedeck.git", branch = "master"}
 django-polymorphic = "*"
-gotoh = "branch master"
+gotoh = {git = "https://github.com/rbturnbull/gotoh.git", branch = "master"}
 lxml = "*"
 matplotlib = "*"
 numpy = "*"
@@ -109,7 +109,7 @@ develop = false
 
 [package.dependencies]
 Django = ">3"
-django-imagedeck = "branch master"
+django-imagedeck = {git = "https://gitlab.unimelb.edu.au/rturnbull/django-imagedeck.git", branch = "master"}
 django-polymorphic = "*"
 lxml = "*"
 matplotlib = "*"
@@ -190,28 +190,26 @@ Django = ">=2.2"
 
 [[package]]
 name = "django-imagedeck"
-version = "0.0.1"
-description = ""
+version = "0.3.0"
+description = "A package to seamlessly group different sorts of images into groups."
 category = "main"
 optional = false
-python-versions = "*"
+python-versions = "^3.8"
 develop = false
 
 [package.dependencies]
-Django = ">3"
-django-admin-sortable2 = ">=0.7.6"
-django-filer = ">=2.0.2"
-django-imagekit = ">=4.0.2"
-django-polymorphic = ">=3.0.0"
-easy-thumbnails = "*"
-Pillow = ">=8.1.1"
-requests = ">=2.24.0"
+Django = "^3.2.6"
+django-filer = "^2.0.2"
+django-imagekit = "^4.0.2"
+django-polymorphic = "^3.0.0"
+easy-thumbnails = "^2.7.1"
+requests = "^2.26.0"
 
 [package.source]
 type = "git"
 url = "https://gitlab.unimelb.edu.au/rturnbull/django-imagedeck.git"
 reference = "master"
-resolved_reference = "a3f2ea82ff5ce9807bcc67e7abb16b3f384079e3"
+resolved_reference = "9fd2ee2e543da7ba773aacd3c60298b5ca1c0985"
 
 [[package]]
 name = "django-imagekit"
@@ -505,7 +503,7 @@ socks = ["PySocks (>=1.5.6,!=1.5.7,<2.0)"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "182f652b1390b64d8e3f04519d924d5b4bdeed70642106e34512e5475e28c8a8"
+content-hash = "417f0a03bcbc117ec268a72bfe8d894b4a73e47c1b3767d055d4adf61347cf3e"
 
 [metadata.files]
 asgiref = [
