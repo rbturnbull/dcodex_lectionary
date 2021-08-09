@@ -1,15 +1,6 @@
-from setuptools import setup
+#!/usr/bin/env python
 
-requirements = [
-    'Django>3',
-    'django-polymorphic',
-    'numpy',
-    'pandas>=1.0.5',
-    'matplotlib',
-]
+import setuptools
 
-setup(
-    install_requires=requirements,
-)
-
-
+if __name__ == "__main__":
+    setuptools.setup()

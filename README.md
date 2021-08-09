@@ -1,5 +1,5 @@
 # dcodex_lectionary
-Extension for DCodex to use lectionaries
+`Extension for D-Codex to use lectionaries`
 
 ## Installation
 

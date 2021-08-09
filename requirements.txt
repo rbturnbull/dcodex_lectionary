@@ -3,14 +3,14 @@ beautifulsoup4==4.9.3
 cycler==0.10.0
 -e git+https://github.com/rbturnbull/dcodex.git#egg=dcodex
 -e git+https://github.com/rbturnbull/dcodex_bible.git#egg=dcodex_bible
-Django==3.1.3
+Django==3.1.12
 django-polymorphic==3.0.0
 -e git+https://github.com/rbturnbull/gotoh.git#egg=gotoh
 kiwisolver==1.3.1
 matplotlib==3.3.3
 numpy==1.19.4
 pandas==1.1.4
-Pillow==8.0.1
+Pillow==8.2.0
 pyparsing==2.4.7
 python-dateutil==2.8.1
 python-Levenshtein==0.12.0
