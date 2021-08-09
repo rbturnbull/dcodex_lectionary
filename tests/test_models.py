@@ -207,24 +207,43 @@ class LectionarySystemTests(TestCase):
         self.system = LectionarySystem(name="Test Lectionary System")
         self.system.save()
 
-    def test_import_from_csv_incomplete(self):
+    def test_import_csv_incomplete(self):
         csv = Path(__file__).parent/"testdata/test-system-incomplete.csv"
         with self.assertRaises(ValueError):
-            self.system.import_from_csv( csv )
+            self.system.import_csv( csv )
         
-    def test_import_from_csv_incorrect_date(self):
+    def test_import_csv_incorrect_date(self):
         csv = Path(__file__).parent/"testdata/test-system-incorrect-date.csv"
         with self.assertRaises(ValueError):
-            self.system.import_from_csv( csv )
+            self.system.import_csv( csv )
         
-    def test_import_from_csv(self):
+    def test_import_csv(self):
         # Create Days
-        MovableDay.objects.update_or_create( season=MovableDay.EASTER, week=1, day_of_week=MovableDay.SUNDAY )
-        MovableDay.objects.update_or_create( season=MovableDay.GREAT_WEEK, week=1, day_of_week=MovableDay.SATURDAY )
+        easter, _ = MovableDay.objects.update_or_create( season=MovableDay.EASTER, week=1, day_of_week=MovableDay.SUNDAY )
+        great_saturday, _ = MovableDay.objects.update_or_create( season=MovableDay.GREAT_WEEK, week=1, day_of_week=MovableDay.SATURDAY )
+        gold_days = [easter, great_saturday]
+        gold_lections = [make_easter_lection(), make_great_saturday_lection()]
 
-        make_easter_lection()
-        make_great_saturday_lection()
         csv = Path(__file__).parent/"testdata/test-system.csv"
-        self.system.import_from_csv( csv )
+        self.system.import_csv( csv )
 
         self.assertEquals( self.system.lections.count(), 2 )
+        
+        lection_memberships = list(self.system.lections_in_system())
+        for membership, gold_day, gold_lection in zip(lection_memberships, gold_days, gold_lections):
+            self.assertEquals( membership.day.id, gold_day.id)
+            self.assertEquals( membership.lection.id, gold_lection.id)
+
+    def test_dataframe(self):
+        easter, _ = MovableDay.objects.update_or_create( season=MovableDay.EASTER, week=1, day_of_week=MovableDay.SUNDAY )
+        great_saturday, _ = MovableDay.objects.update_or_create( season=MovableDay.GREAT_WEEK, week=1, day_of_week=MovableDay.SATURDAY )
+        gold_days = [easter, great_saturday]
+        gold_lections = [make_easter_lection(), make_great_saturday_lection()]
+
+        for day, lection in zip(gold_days, gold_lections):
+            self.system.add_lection( day, lection )
+
+        df = self.system.dataframe()
+        gold_columns = ['lection', 'season', 'week', 'day']
+        self.assertListEqual( gold_columns, list(df.columns) )
+        self.assertEquals( len(df.index), 2 )

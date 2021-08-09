@@ -672,14 +672,44 @@ class LectionarySystem(models.Model):
     def lections_in_system_min_verses(self, min_verses=2):
         return [m for m in self.lections_in_system().all() if m.lection.verses.count() >= min_verses]
 
-    def import_from_csv(self, csv, replace=False, create_verses=True):
+    def export_csv(self, filename) -> pd.DataFrame:
+        """
+        Exports the lectionary system as a CSV.
+
+        Returns the lectionary system as a dataframe.
+        """
+        df = self.dataframe()
+        df.to_csv(filename)
+        return df
+    
+    def dataframe(self) -> pd.DataFrame:
+        """
+        Returns the lectionary system as a pandas dataframe.
+        """
+        data = []
+        columns = ["lection", 'season', 'week', 'day']
+        for lection_membership in self.lections_in_system():
+            if type(lection_membership.day) != MovableDay:
+                raise NotImplementedError(f"Cannot yet export for days of type {type(lection_membership.day)}.")
+            data.append(
+                [
+                    lection_membership.lection.description, 
+                    lection_membership.day.get_season_display(), 
+                    lection_membership.day.week, 
+                    lection_membership.day.get_day_of_week_display(), 
+                ]
+            )
+        df = pd.DataFrame(data, columns=columns)
+        return df
+
+    def import_csv(self, csv, replace=False, create_verses=True):
         """ 
         Reads a CSV and lections from it into this lectionary system.
 
-        The CSV file must have columns corresponding to 'season', 'week', 'day', 'passage', 'parallels' (optional).
+        The CSV file must have columns corresponding to 'lection', 'season', 'week', 'day', 'parallels' (optional).
         """
         df = pd.read_csv(csv)
-        required_columns = ['season', 'week', 'day', 'passage']
+        required_columns = ['season', 'week', 'day', 'lection']
         for required_column in required_columns:
             if not required_column in df.columns:
                 raise ValueError(f"No column named '{required_column}' in {df.columns}.")
@@ -698,7 +728,7 @@ class LectionarySystem(models.Model):
                 parallels = []
 
             lection = Lection.update_or_create_from_passages_string( 
-                row["passage"], 
+                row["lection"], 
                 lection_descriptions_with_verses=parallels, 
                 create_verses=create_verses,
             )
