@@ -1,24 +1,31 @@
+from pathlib import Path
+from itertools import chain
+from lxml import etree
+
 from django.db import models
 from django.db.models import F
 from django.db.models import Max, Min, Sum
-from dcodex.models import Manuscript, Verse, VerseLocation
-from dcodex_bible.models import BibleVerse
-from polymorphic.models import PolymorphicModel
-from dcodex_bible.similarity import * 
 from django.shortcuts import render
-from lxml import etree
+from polymorphic.models import PolymorphicModel
 
-from itertools import chain
 import numpy as np
 import pandas as pd
-import dcodex.distance as distance
 from collections import defaultdict
 from scipy.special import expit
 import gotoh
 
+from dcodex.models import Manuscript, Verse, VerseLocation
+from dcodex_bible.models import BibleVerse
+from dcodex_bible.similarity import * 
+import dcodex.distance as distance
+
 import logging
 
 DEFAULT_LECTIONARY_VERSE_MASS = 50
+
+def data_dir():
+    return Path(__file__).parent/"data"
+
 
 class LectionaryVerse(Verse):
     bible_verse = models.ForeignKey(BibleVerse, on_delete=models.CASCADE, default=None, null=True, blank=True )
@@ -27,6 +34,7 @@ class LectionaryVerse(Verse):
     
     class Meta:
         ordering = ('bible_verse',)
+
     def save(self,*args,**kwargs):
         # Check to see if ID is assigned
         if self.mass == 0:
@@ -106,14 +114,12 @@ class LectionaryVerse(Verse):
         return LectionaryVerse.objects.filter( bible_verse=self.bible_verse ).exclude( id=self.id )
 
 
-
 class Lection(models.Model):
     verses = models.ManyToManyField(LectionaryVerse, through='LectionaryVerseMembership')
     description = models.CharField(max_length=100)
     first_verse_id = models.IntegerField(default=0)
     first_bible_verse_id = models.IntegerField(default=0)
     
-
     def save(self,*args,**kwargs):
         # Check to see if ID is assigned
         if not self.id:
@@ -718,9 +724,10 @@ class LectionarySystem(models.Model):
             season = MovableDay.read_season(row['season'])
             week = row['week']
             day_of_week = MovableDay.read_day_of_week(row['day'])
-            day_of_year = MovableDay.objects.filter( season=season, week=week, day_of_week=day_of_week ).first()
+            day_filters = dict(season=season, week=week, day_of_week=day_of_week)
+            day_of_year = MovableDay.objects.filter( **day_filters ).first()
             if not day_of_year:
-                raise ValueError(f"Cannot find day for row\n{row}")
+                raise ValueError(f"Cannot find day for row\n{row}. Filters: {day_filters}")
             
             if "parallels" in row and not pd.isna(row["parallels"]):
                 parallels = row["parallels"].split("|")
@@ -737,7 +744,13 @@ class LectionarySystem(models.Model):
                 self.replace_with_lection(day_of_year, lection)
             else:
                 self.add_lection( day_of_year, lection )
-        
+
+    @classmethod
+    def create_epistles_e(cls, **kwargs):
+        system, _ = cls.objects.update_or_create(name="Epistles e")
+        system.import_csv( data_dir()/"LectionarySystem-Epistles-e.csv", **kwargs )
+        return system
+
     def next_lection_in_system(self, lection_in_system):
         found = False
         for object in self.lections_in_system().all():

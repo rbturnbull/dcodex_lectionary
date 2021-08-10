@@ -3,7 +3,7 @@ import pandas as pd
 from dcodex_lectionary import models
 
 class Command(BaseCommand):
-    help = 'Imports .'
+    help = 'Imports a lectionary system from CSV.'
 
     def add_arguments(self, parser):
         parser.add_argument('system', type=str, help="The name of the lectionary system to import.")

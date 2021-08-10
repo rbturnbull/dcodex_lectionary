@@ -198,8 +198,10 @@ class MovableDayTests(TestCase):
         self.assertEquals( MovableDay.read_season("Theophany"), MovableDay.EPIPHANY )
         self.assertEquals( MovableDay.read_season("cross"), MovableDay.FEAST_OF_THE_CROSS )
 
-    def test_read_season(self):
+    def test_read_day(self):
         self.assertEquals( MovableDay.read_day_of_week("Sunday"), MovableDay.SUNDAY )
+        self.assertEquals( MovableDay.read_day_of_week("sun"), MovableDay.SUNDAY )
+        self.assertEquals( MovableDay.read_day_of_week("Tues"), MovableDay.TUESDAY )
 
 
 class LectionarySystemTests(TestCase):
@@ -247,3 +249,12 @@ class LectionarySystemTests(TestCase):
         gold_columns = ['lection', 'season', 'week', 'day']
         self.assertListEqual( gold_columns, list(df.columns) )
         self.assertEquals( len(df.index), 2 )
+
+
+class FixtureTests(TestCase):
+    fixtures = ["lectionarydays.json"]
+
+    def test_moveable_days(self):
+        self.assertEqual( MovableDay.objects.filter( season=MovableDay.EASTER, week=1, day_of_week=MovableDay.SUNDAY ).count(), 1 )
+        self.assertEqual( MovableDay.objects.filter( season=MovableDay.PENTECOST, week=1, day_of_week=MovableDay.MONDAY ).count(), 1 )
+

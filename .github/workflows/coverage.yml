@@ -1,5 +1,5 @@
 # Based on https://github.com/actions/starter-workflows/blob/main/ci/python-package.yml
-name: dcodex lectionary
+name: pipeline
 
 on: [push]
 jobs:

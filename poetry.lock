@@ -94,34 +94,27 @@ scipy = "*"
 
 [package.source]
 type = "git"
-url = "https://github.com/rbturnbull/dcodex"
+url = "https://github.com/rbturnbull/dcodex.git"
 reference = "master"
 resolved_reference = "ccae4e9c39f01d5f0f5d03528d896ab8b41c4006"
 
 [[package]]
-name = "dcodex_bible"
-version = "1.0.0"
-description = ""
+name = "dcodex-bible"
+version = "1.0.6"
+description = "An extension for D-Codex to use biblical manuscripts."
 category = "main"
 optional = false
-python-versions = "*"
+python-versions = "^3.8"
 develop = false
 
 [package.dependencies]
-Django = ">3"
-django-imagedeck = {git = "https://gitlab.unimelb.edu.au/rturnbull/django-imagedeck.git", branch = "master"}
-django-polymorphic = "*"
-lxml = "*"
-matplotlib = "*"
-numpy = "*"
-pandas = ">=1.0.5"
-requests = "*"
+dcodex = {git = "https://github.com/rbturnbull/dcodex.git", branch = "master"}
 
 [package.source]
 type = "git"
 url = "https://github.com/rbturnbull/dcodex_bible"
 reference = "master"
-resolved_reference = "61a56ff767a6e20dedc8d207944c756561e1d697"
+resolved_reference = "8de8df0372d548e363bdd4299828a56300f6c486"
 
 [[package]]
 name = "django"
@@ -503,7 +496,7 @@ socks = ["PySocks (>=1.5.6,!=1.5.7,<2.0)"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "417f0a03bcbc117ec268a72bfe8d894b4a73e47c1b3767d055d4adf61347cf3e"
+content-hash = "012bac105d373f36ed82fb6ccbe1b6643c54228417e6a91b74491da7033647ae"
 
 [metadata.files]
 asgiref = [
@@ -582,7 +575,7 @@ cycler = [
     {file = "cycler-0.10.0.tar.gz", hash = "sha256:cd7b2d1018258d7247a71425e9f26463dfb444d411c39569972f4ce586b0c9d8"},
 ]
 dcodex = []
-dcodex_bible = []
+dcodex-bible = []
 django = [
     {file = "Django-3.2.6-py3-none-any.whl", hash = "sha256:7f92413529aa0e291f3be78ab19be31aefb1e1c9a52cd59e130f505f27a51f13"},
     {file = "Django-3.2.6.tar.gz", hash = "sha256:f27f8544c9d4c383bbe007c57e3235918e258364577373d4920e9162837be022"},
