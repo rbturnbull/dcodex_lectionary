@@ -35,3 +35,7 @@ To use the standard versification system of the Old and New Testaments, install 
 ```
 python manage.py loaddata lectionarydays
 ```
+
+## References
+
+Dates and lections adapted from https://www.bombaxo.com/the-greek-orthodox-lectionary/ which uses The Orthodox Study Bible. Nashville, Tennessee: Thomas Nelson Publishers, 1993: 771-780.
