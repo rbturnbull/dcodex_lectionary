@@ -33,6 +33,7 @@ class FixedDayAdmin(LectionaryDayChildAdmin):
 class MovableDayAdmin(SortableAdminMixin, LectionaryDayChildAdmin):
     base_model = MovableDay
     show_in_index = True
+    list_per_page = 200
 
 
 @admin.register(LectionaryDay)

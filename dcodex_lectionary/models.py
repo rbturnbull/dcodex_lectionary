@@ -426,10 +426,10 @@ class MovableDay(LectionaryDay):
     ]
     season = models.CharField(max_length=1, choices=SEASON_CHOICES)
     
-    week = models.CharField(max_length=31)
-    weekday_number = models.CharField(max_length=32)    
-    earliest_date = models.CharField(max_length=15) 
-    latest_date = models.CharField(max_length=15) 
+    week = models.CharField(max_length=31, blank=True, default="")
+    weekday_number = models.CharField(max_length=32, blank=True, default="")    
+    earliest_date = models.CharField(max_length=15, blank=True, default="") 
+    latest_date = models.CharField(max_length=15, blank=True, default="") 
     rank = models.PositiveIntegerField(default=0, blank=False, null=False)
 
     class Meta:
@@ -715,6 +715,7 @@ class LectionarySystem(models.Model):
         The CSV file must have columns corresponding to 'lection', 'season', 'week', 'day', 'parallels' (optional).
         """
         df = pd.read_csv(csv)
+        df.fillna('', inplace=True)
         required_columns = ['season', 'week', 'day', 'lection']
         for required_column in required_columns:
             if not required_column in df.columns:
@@ -739,6 +740,7 @@ class LectionarySystem(models.Model):
                 lection_descriptions_with_verses=parallels, 
                 create_verses=create_verses,
             )
+            print(f"\t{day_of_year} -> {lection}")
 
             if replace:
                 self.replace_with_lection(day_of_year, lection)
