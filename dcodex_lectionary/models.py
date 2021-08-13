@@ -753,6 +753,12 @@ class LectionarySystem(models.Model):
         system.import_csv( data_dir()/"LectionarySystem-Epistles-e.csv", **kwargs )
         return system
 
+    @classmethod
+    def create_epistles_esk(cls, **kwargs):
+        system, _ = cls.objects.update_or_create(name="Epistles esk")
+        system.import_csv( data_dir()/"LectionarySystem-Epistles-esk.csv", **kwargs )
+        return system
+
     def next_lection_in_system(self, lection_in_system):
         found = False
         for object in self.lections_in_system().all():
