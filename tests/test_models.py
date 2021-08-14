@@ -5,6 +5,7 @@ from django.test import TestCase
 
 from dcodex.models import *
 from dcodex_bible.models import *
+from imagedeck.models import DeckImage, Deck
 from dcodex_lectionary.models import *
 
 def make_easter_lection():
@@ -41,6 +42,33 @@ class LectionaryTests(TestCase):
         self.assertIs( easter_lection.verses.count(), 17 )
         self.assertEquals( str(great_saturday_lection), "Mt 28:1–20" )
         self.assertIs( great_saturday_lection.verses.count(), 20 )
+
+    def test_lectionary_first_position(self):
+        easter_lection = make_easter_lection()
+        great_saturday_lection = make_great_saturday_lection()
+
+        easter, _ = MovableDay.objects.update_or_create( season=MovableDay.EASTER, week=1, day_of_week=MovableDay.SUNDAY )
+        great_saturday, _ = MovableDay.objects.update_or_create( season=MovableDay.GREAT_WEEK, week=1, day_of_week=MovableDay.SATURDAY )
+
+        system = LectionarySystem.objects.create(name="Test Lectionary System")
+        system.add_lection(easter, easter_lection)
+        system.add_lection(great_saturday, great_saturday_lection)
+
+        ms = Lectionary.objects.create(name="Test Lectionary", system=system)
+        ms.imagedeck = Deck.objects.create(name="Test Lectionary Imagedeck")
+        ms.save()   
+
+        membership1 = ms.imagedeck.add_image( DeckImage.objects.create() )
+        membership2 = ms.imagedeck.add_image( DeckImage.objects.create() )
+        membership3 = ms.imagedeck.add_image( DeckImage.objects.create() )
+
+        first_location = ms.save_location(easter_lection.verses.first(), membership1, 0.0, 0.0)
+        ms.save_location(easter_lection.verses.last(), membership2, 0.0, 0.0)
+        last_location = ms.save_location(great_saturday_lection.verses.last(), membership3, 0.0, 0.5)
+        ms.save_location(great_saturday_lection.verses.first(), membership3, 0.0, 0.0)
+
+        self.assertEqual( ms.first_location().id, first_location.id)
+        self.assertEqual( ms.last_location().id, last_location.id)
 
     def test_affiliation_lection(self):
         """
