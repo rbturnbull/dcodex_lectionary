@@ -1,4 +1,5 @@
 from pathlib import Path
+from re import A
 from django.test import TestCase
 
 #from model_bakery import baker
@@ -10,21 +11,55 @@ from dcodex_lectionary.models import *
 
 def make_easter_lection():
     start_rank = book_names.index('John') * 100
-    bible_verses = [BibleVerse(book=book_names.index('John'), chapter=1, verse=i, rank=start_rank+i) for i in range(1,17+1)]
-    for verse in bible_verses: 
-        verse.save()
-    
+    char_aggregate = BibleVerse.objects.count()
+    for i in range(1,17+1):
+        BibleVerse.objects.create(
+            book=book_names.index('John'), 
+            chapter=1, 
+            verse=i, 
+            rank=start_rank+i, 
+            char_aggregate=char_aggregate+i*DEFAULT_LECTIONARY_VERSE_MASS, 
+            char_count=DEFAULT_LECTIONARY_VERSE_MASS,
+        )     
     lection = Lection.update_or_create_from_passages_string( "Jn 1:1–17", create_verses=True)
     return lection
 
 def make_great_saturday_lection():
     start_rank = book_names.index('Matthew') * 100
-    bible_verses = [BibleVerse(book=book_names.index('Matthew'), chapter=28, verse=i, rank=start_rank+i) for i in range(1,20+1)]
-    for verse in bible_verses: verse.save()
+    char_aggregate = BibleVerse.objects.count()
+    for i in range(1,20+1):
+        BibleVerse.objects.create(
+            book=book_names.index('Matthew'), 
+            chapter=28, 
+            verse=i, 
+            rank=start_rank+i, 
+            char_aggregate=char_aggregate+i*DEFAULT_LECTIONARY_VERSE_MASS, 
+            char_count=DEFAULT_LECTIONARY_VERSE_MASS,
+        )     
     
     lection = Lection.update_or_create_from_passages_string( "Mt 28:1–20", create_verses=True)
     return lection
         
+
+class LectionTests(TestCase):
+    def test_cumulative_mass_from_lection_start(self):
+        lection = make_easter_lection()
+        for index, verse_membership in enumerate(lection.verse_memberships()):
+            self.assertEqual( verse_membership.cumulative_mass_from_lection_start, index*DEFAULT_LECTIONARY_VERSE_MASS )
+
+
+class LectionaryVerseTests(TestCase):
+    def test_get_from_string(self):
+        make_great_saturday_lection()
+        verse = LectionaryVerse.get_from_string("Mt28:10")
+        self.assertIsNotNone( verse )
+        self.assertEqual(str(verse), "Matthew 28:10")
+
+    def test_mass(self):
+        make_great_saturday_lection()
+        verse = LectionaryVerse.get_from_string("Mt28:10")
+        self.assertEqual( verse.bible_verse.char_aggregate, 10*DEFAULT_LECTIONARY_VERSE_MASS )
+        self.assertEqual( verse.mass, DEFAULT_LECTIONARY_VERSE_MASS )
 
 
 class LectionaryTests(TestCase):
@@ -286,3 +321,45 @@ class FixtureTests(TestCase):
         self.assertEqual( MovableDay.objects.filter( season=MovableDay.EASTER, week=1, day_of_week=MovableDay.SUNDAY ).count(), 1 )
         self.assertEqual( MovableDay.objects.filter( season=MovableDay.PENTECOST, week=1, day_of_week=MovableDay.MONDAY ).count(), 1 )
 
+
+class LectionaryLocationTests(TestCase):
+
+    def setUp(self):
+        easter_lection = make_easter_lection()
+        great_saturday_lection = make_great_saturday_lection()
+
+        easter, _ = MovableDay.objects.update_or_create( season=MovableDay.EASTER, week=1, day_of_week=MovableDay.SUNDAY )
+        great_saturday, _ = MovableDay.objects.update_or_create( season=MovableDay.GREAT_WEEK, week=1, day_of_week=MovableDay.SATURDAY )
+
+        system = LectionarySystem.objects.create(name="Test Lectionary System")
+        system.add_lection(easter, easter_lection)
+        system.add_lection(great_saturday, great_saturday_lection)
+        system.maintenance()
+
+        self.ms = Lectionary.objects.create(name="Test Lectionary", system=system)
+        self.ms.imagedeck = Deck.objects.create(name="Test Lectionary Imagedeck")
+        self.ms.save()   
+
+        self.membership1 = self.ms.imagedeck.add_image( DeckImage.objects.create() )
+        self.membership2 = self.ms.imagedeck.add_image( DeckImage.objects.create() )
+        self.membership3 = self.ms.imagedeck.add_image( DeckImage.objects.create() )
+
+        self.first_location = self.ms.save_location(easter_lection.verses.first(), self.membership1, 0.0, 0.0)
+        self.ms.save_location(easter_lection.verses.last(), self.membership2, 0.0, 0.0)
+        verse = LectionaryVerse.get_from_string("Mt28:10")
+        self.last_location = self.ms.save_location(verse, self.membership3, 0.0, 0.5)
+        verse = LectionaryVerse.get_from_string("Mt28:1")
+        self.ms.save_location(verse, self.membership3, 0.0, 0.0)
+
+    def test_lectionary_first_position(self):
+        self.assertEqual( self.ms.first_location().id, self.first_location.id)
+
+    def test_lectionary_first_position(self):
+        self.assertEqual( self.ms.last_location().id, self.last_location.id)    
+
+    def test_lectionary_extrapolate(self):
+        location = self.ms.location( LectionaryVerse.get_from_string("Mt28:20") )
+        self.assertEqual( location.id, None )    
+        self.assertIsNotNone( location.deck_membership )    
+        self.assertEqual( location.deck_membership.id, self.membership3.id )
+        self.assertEqual( location.y, 1.0 )

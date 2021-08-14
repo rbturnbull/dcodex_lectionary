@@ -38,7 +38,7 @@ class LectionaryVerse(Verse):
     def save(self,*args,**kwargs):
         # Check to see if ID is assigned
         if self.mass == 0:
-            self.mass = self.bible_verse.char_count if self.bible_verse else DEFAULT_LECTIONARY_VERSE_MASS
+            self.mass = self.bible_verse.char_count if self.bible_verse and self.bible_verse.char_count else DEFAULT_LECTIONARY_VERSE_MASS
             
         super().save(*args,**kwargs)   
     
@@ -262,6 +262,7 @@ class Lection(models.Model):
 
         lection.verses.clear()  
         lection.add_verses_from_range( start_verse_string, end_verse_string, lection_descriptions_with_verses, create_verses )
+        lection.maintenance()
     
         return lection 
 
@@ -273,6 +274,8 @@ class Lection(models.Model):
 
         lection.verses.clear()  
         lection.add_verses_from_passages_string( passages_string, overlapping_lection_descriptions=lection_descriptions_with_verses, create_verses=create_verses )
+        lection.maintenance()
+
         return lection    
 
     @classmethod
@@ -746,6 +749,9 @@ class LectionarySystem(models.Model):
                 self.replace_with_lection(day_of_year, lection)
             else:
                 self.add_lection( day_of_year, lection )
+        
+        self.maintenance()
+
 
     @classmethod
     def create_epistles_e(cls, **kwargs):
@@ -791,6 +797,7 @@ class LectionarySystem(models.Model):
     def calculate_masses_all_systems( cls ):
         for system in cls.objects.all():
             system.calculate_masses()
+
     @classmethod
     def maintenance_all_systems( cls ):
         print("Doing maintenance for each lection")
