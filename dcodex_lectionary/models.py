@@ -1148,17 +1148,16 @@ class Lectionary( Manuscript ):
             return VerseLocation.objects.filter( manuscript=self, verse__id=verse_id ).first()
                                        
         return None                
-                
-                
-                
-                
-    def last_location( self, pdf ):
-        return VerseLocation.objects.filter( manuscript=self, pdf=pdf ).order_by('-page', '-y').first()
-    def first_location( self, pdf ):
-        return VerseLocation.objects.filter( manuscript=self, pdf=pdf ).order_by('page', 'y').first()
+                        
+    def last_location( self ):
+        return VerseLocation.objects.filter( manuscript=self ).order_by('-page', '-y').first()
+
+    def first_location( self ):
+        return VerseLocation.objects.filter( manuscript=self ).order_by('page', 'y').first()
         
     def first_verse( self ):
         return self.system.first_verse()
+
     def first_empty_verse( self ):
         verse = self.first_verse()
         while verse is not None:
