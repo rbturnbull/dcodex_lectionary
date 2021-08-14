@@ -43,7 +43,7 @@ class LectionaryTests(TestCase):
         self.assertEquals( str(great_saturday_lection), "Mt 28:1–20" )
         self.assertIs( great_saturday_lection.verses.count(), 20 )
 
-    def test_lectionary_first_position(self):
+    def test_lectionary_first_last_positions(self):
         easter_lection = make_easter_lection()
         great_saturday_lection = make_great_saturday_lection()
 
