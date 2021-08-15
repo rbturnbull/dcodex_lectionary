@@ -6,6 +6,7 @@ from django.db import models
 from django.db.models import F
 from django.db.models import Max, Min, Sum
 from django.shortcuts import render
+from django.urls import reverse
 from polymorphic.models import PolymorphicModel
 
 import numpy as np
@@ -1185,13 +1186,11 @@ class Lectionary( Manuscript ):
              day_description = lection_in_system.day_description()
         url_ref = verse.url_ref()
 
-
-        dict = { 
+        return { 
             'title': "%s %s %s" % (self.siglum, day_description, verse.reference_abbreviation() ), 
-            'url': "/dcodex/ms/%s/%s/" % ( self.siglum, url_ref ),
+            'url': reverse( "dcodex-manuscript-verse", kwargs=dict(request_siglum=self.siglum, request_verse=url_ref) ),
             'verse_url_ref': url_ref, 
         }
-        return dict    
 
     def lection_transcribed_count( self, lection ):
         return self.transcription_class().objects.filter( manuscript=self, verse__in=lection.verses.all() ).count()

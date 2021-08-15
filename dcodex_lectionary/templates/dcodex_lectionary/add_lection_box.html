@@ -52,20 +52,20 @@
 		
 		$("#insertLection").click(function() {
 		    var lection_id = $("#existingLections").children("option:selected").val();
-		    insert_ajax( '/dcodex_lectionary/ajax/insert-lection/', {'lection_id':lection_id} );
+		    insert_ajax( '{% url "dcodex-lectionary-insert-lection" %}', {'lection_id':lection_id} );
 		});
 		$("#insertReferenceSubmitButton").click(function() {
 		    var reference_text_en = $("#reference_text_en").val();
 //		    var incipit = $("#incipit").val();
 		    var reference_membership = $("#reference_membership").children("option:selected").val();
 		    
-		    insert_ajax( '/dcodex_lectionary/ajax/insert-reference/', {'reference_text_en':reference_text_en, 'reference_membership':reference_membership} );
+		    insert_ajax( '{% url "dcodex-lectionary-insert-reference" %}', {'reference_text_en':reference_text_en, 'reference_membership':reference_membership} );
 		});		
 		$("#date").change(function() {
 		    var date_id = $("#date").children("option:selected").val();		    
 		    var data = {'date_id':date_id };
 		    
-		    $("#suggestions").load( '/dcodex_lectionary/ajax/lection-suggestions/', data, function() {
+		    $("#suggestions").load( '{% url "dcodex-lectionary-lection-suggestions" %}', data, function() {
 		        console.log('Loaded suggestions');
 		    });
 		});
@@ -73,7 +73,7 @@
 		    var lection_description = $("#lectionDescription").val();
 		    var overlapping_lection_IDs_string = JSON.stringify(overlapping_lection_IDs);
 		    
-		    insert_ajax( '/dcodex_lectionary/ajax/create-lection/', {'lection_description':lection_description, 'overlapping_lection_IDs':overlapping_lection_IDs_string} );
+		    insert_ajax( '{% url "dcodex-lectionary-create-lection" %}', {'lection_description':lection_description, 'overlapping_lection_IDs':overlapping_lection_IDs_string} );
 		});
 		
 		

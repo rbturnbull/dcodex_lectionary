@@ -1,19 +1,12 @@
 {% load static %}
 <script type="text/javascript">
-//    function get_verses(lection_id, verse_id) {
-//        $('#verseSelectSpan').load("/dcodex_lectionary/ajax/lection-verses/", {'lection_id':lection_id, 'verse_id': verse_id, 'field_class':'verseSearchField', 'field_id':'verseSelect'}, function() {
-//        });
-//    }
 	$(document).ready(function() {	
 		$('#lectionSelect').change(function() {
-//            get_verses($(this).val(), {{ verse.id }});
             seekVerse($(this).find('option:selected').data('firstverse'), {{ manuscript.id }});
 		});
         $('#verseSelect').change(function() {
             seekVerse($(this).val(), {{ manuscript.id }});
-        });
-		
-		//get_verses({{ lection_in_system.lection.id }}, {{ verse.id }});
+        });		
     });
 </script>
 
