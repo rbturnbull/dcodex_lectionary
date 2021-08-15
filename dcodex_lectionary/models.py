@@ -787,11 +787,13 @@ class LectionarySystem(models.Model):
             lection_in_system.cumulative_mass_lections = cumulative_mass
             lection_in_system.save()
 
-            try:
-                cumulative_mass += lection_in_system.lection.calculate_mass()
-            except:
-                print( 'Failed to calculate mass:', lection_in_system.lection )
-                continue
+            cumulative_mass += lection_in_system.lection.calculate_mass()
+
+            # try:
+            #     cumulative_mass += lection_in_system.lection.calculate_mass()
+            # except Exception as err:
+            #     print( f'Failed to calculate mass: {lection_in_system.lection}\n{err}' )
+            #     continue
 
     @classmethod
     def calculate_masses_all_systems( cls ):

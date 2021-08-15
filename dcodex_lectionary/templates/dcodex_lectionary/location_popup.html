@@ -1,7 +1,7 @@
 {% load static %}
 <script type="text/javascript">
     function get_load_verses(lection_id, verse_id) {
-        $('#verseAtLocationSpan').load("/dcodex_lectionary/ajax/lection-verses/", {'lection_id':lection_id, 'verse_id': verse_id, 'field_class':'verseLoadField', 'field_id':'verseAtLocation'}, function() {
+        $('#verseAtLocationSpan').load("{% url 'dcodex-lectionary-lection-verses' %}", {'lection_id':lection_id, 'verse_id': verse_id, 'field_class':'verseLoadField', 'field_id':'verseAtLocation'}, function() {
     		$('#verseAtLocation').change(function() {
 		    });
         });
@@ -14,7 +14,7 @@
 		});
 		get_load_verses({{ lection_in_system.lection.id }}, {{ verse.id }});
 		$('.addLectionShowButton').click(function() {
-            $('#addLectionWindow').load("/dcodex_lectionary/ajax/add-lection-box/", {'manuscript_id':{{ manuscript.id }}, 'lection_in_system_id': {{ lection_in_system.id }} }, function() {
+            $('#addLectionWindow').load("{% url 'dcodex-lectionary-add-lection-box' %}", {'manuscript_id':{{ manuscript.id }}, 'lection_in_system_id': {{ lection_in_system.id }} }, function() {
                 register_close_buttons();
                 $(this).show();
             });
