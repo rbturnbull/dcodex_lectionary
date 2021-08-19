@@ -755,15 +755,27 @@ class LectionarySystem(models.Model):
 
 
     @classmethod
-    def create_epistles_e(cls, **kwargs):
-        system, _ = cls.objects.update_or_create(name="Epistles e")
-        system.import_csv( data_dir()/"LectionarySystem-Epistles-e.csv", **kwargs )
+    def create_apostolos_e(cls, **kwargs):
+        system, _ = cls.objects.update_or_create(name="Apostolos e")
+        system.import_csv( data_dir()/"LectionarySystem-Apostolos-e.csv", **kwargs )
         return system
 
     @classmethod
-    def create_epistles_esk(cls, **kwargs):
-        system, _ = cls.objects.update_or_create(name="Epistles esk")
-        system.import_csv( data_dir()/"LectionarySystem-Epistles-esk.csv", **kwargs )
+    def create_apostolos_esk(cls, **kwargs):
+        system, _ = cls.objects.update_or_create(name="Apostolos esk")
+        system.import_csv( data_dir()/"LectionarySystem-Apostolos-esk.csv", **kwargs )
+        return system
+
+    @classmethod
+    def create_apostolos_sk(cls, **kwargs):
+        system, _ = cls.objects.update_or_create(name="Apostolos sk")
+        system.import_csv( data_dir()/"LectionarySystem-Apostolos-sk.csv", **kwargs )
+        return system
+
+    @classmethod
+    def create_apostolos_k(cls, **kwargs):
+        system, _ = cls.objects.update_or_create(name="Apostolos k")
+        system.import_csv( data_dir()/"LectionarySystem-Apostolos-k.csv", **kwargs )
         return system
 
     def next_lection_in_system(self, lection_in_system):
