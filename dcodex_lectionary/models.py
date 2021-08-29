@@ -136,6 +136,12 @@ class Lection(models.Model):
             
     class Meta:
         ordering = ['first_bible_verse_id','description']
+
+    def bible_verse_url_ref(self):
+        verse = self.verses.exclude(bible_verse=None).first()
+        if verse:
+            return verse.url_ref()
+        return None
         
     def __str__(self):
         return self.description
@@ -1313,21 +1319,42 @@ class Lectionary( Manuscript ):
                         
         return results
 
-    def similarity_df( self, comparison_mss, min_verses = 2, **kwargs ):
+    def similarity_dict( self, comparison_mss, min_verses = 2, ignore_unstranscribed=True, **kwargs ):
+        similarity_dict = dict()
+        for i, lection_in_system in enumerate(self.system.lections_in_system().all()):
+
+            lection = lection_in_system.lection
+            if lection.verses.count() < min_verses:
+                continue
+                
+            if VerseTranscriptionBase.objects.filter(manuscript=self, verse__in=lection.verses.all()).count() < min_verses:
+                continue
+
+            averages = self.similarity_lection( lection, comparison_mss, **kwargs )
+            similarity_dict[ lection_in_system ] = dict(zip( comparison_mss, averages ))
+        return similarity_dict
+
+
+    def similarity_df( self, comparison_mss, min_verses = 2, ignore_unstranscribed=True, **kwargs ):
+        """ TODO get from similarity_dict """
         columns = ['Lection']
                 
         columns += [ms.siglum for ms in comparison_mss]
         
-        df = pd.DataFrame(columns=columns)
+        data = []
         for i, lection_in_system in enumerate(self.system.lections_in_system().all()):
             lection = lection_in_system.lection
             if lection.verses.count() < min_verses:
                 continue
                 
+            if VerseTranscriptionBase.objects.filter(manuscript=self, verse__in=lection.verses.all()).count() < min_verses:
+                continue
+
             averages = self.similarity_lection( lection, comparison_mss, **kwargs )
                 
-            df.loc[i] = [str(lection_in_system)] + averages
-
+            data.append( [str(lection_in_system)] + averages )
+        
+        df = pd.DataFrame(data, columns=columns)
         return df    
         
                         
@@ -1458,7 +1485,7 @@ class Lectionary( Manuscript ):
                 fill_empty=True,
                 space_evenly=False,
                 ignore_untranscribed=False,
-                    ):
+    ):
 
         import pandas as pd
         import numpy as np
@@ -1537,8 +1564,9 @@ class Lectionary( Manuscript ):
             elif mode is HIGHLY_LIKELY__ELSE:
                 plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask(ms_df[ms_siglum+"_probability"] < 0.95), '-', color=colors[index], linewidth=2.5, label=mss_sigla[ms_siglum] + " (Highly Likely)" );
                 plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'], '--', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum] );        
+            elif mode is SOLID:
+                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'], marker=circle_marker, linestyle='-', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum], zorder=10, markerfacecolor='white', markeredgecolor=colors[index], markersize=5.0 );        
             else:    
-            
                 plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask(ms_df[ms_siglum+"_probability"] < 0.5), marker=circle_marker, linestyle='-', color=colors[index], linewidth=2.5, label=mss_sigla[ms_siglum] + " (Likely)", zorder=11, markersize=8.0,  markerfacecolor=colors[index], markeredgecolor=colors[index]);
                 plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'], marker=circle_marker, linestyle='--', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum] + " (Unlikely)", zorder=10, markerfacecolor='white', markeredgecolor=colors[index], markersize=5.0 );        
     #            plt.plot(df.index, df[ms_siglum+'_similarity'].mask(df[ms_siglum+"_probability"] > 0.5), '--', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum] + " (Unlikely)" );        
@@ -1546,7 +1574,8 @@ class Lectionary( Manuscript ):
         plt.ylim([ymin, ymax])
         ax.set_xticklabels([])
     
-        plt.ylabel('Similarity', horizontalalignment='right', y=1.0)
+
+        plt.ylabel(f'Similarity with {self.siglum}', horizontalalignment='right', y=1.0)
         ax.yaxis.set_major_formatter(mtick.PercentFormatter(decimals=0))
     
     

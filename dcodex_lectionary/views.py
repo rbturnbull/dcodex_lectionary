@@ -38,6 +38,7 @@ def insert_lection(request):
     system.maintenance()
     
     return JsonResponse({ 'first_verse_id':lection.first_verse_id,} );
+
 @login_required
 def create_lection(request):
     request_dict = get_request_dict(request)
@@ -192,9 +193,21 @@ def similarity(request, request_siglum, comparison_sigla_string):
         if comparison_ms:
             comparison_mss.append( comparison_ms )
     
+    data = manuscript.similarity_dict( comparison_mss, ignore_incipits=True )
+    threshold = 76.4    
+
+    context = dict(
+        manuscript=manuscript,
+        data=data,
+        comparison_mss=comparison_mss,
+        all_mss=Lectionary.objects.all(),
+        comparison_sigla_string=comparison_sigla_string,
+        threshold=threshold,
+    )
+    return render(request, 'dcodex_lectionary/similarity.html', context )
+
     df = manuscript.similarity_df(comparison_mss, ignore_incipits=True)
     title = "%s Similarity" % (str(manuscript.siglum))
-    threshold = 76.4    
     styled_df = df.style.apply( lambda x: ['font-weight: bold; background-color: yellow' if value and value > threshold else '' for value in x],
                   subset=comparison_sigla)
     return render(request, 'dcodex/table.html', {'table': styled_df.render(), 'title':title} )

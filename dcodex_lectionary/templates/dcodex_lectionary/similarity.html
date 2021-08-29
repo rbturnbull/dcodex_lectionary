@@ -1,0 +1,62 @@
+{% extends 'dcodex/base_logo.html' %}
+
+{% block title %}{{ manuscript.siglum}} Similarity{% endblock %}
+
+{% block left_sidebar %}
+<h3>Base MS.</h3>
+<div id="sidebar_cards">
+  {% for ms in all_mss %}
+    <div class="sidebar_card {% if ms.id == manuscript.id %}sidebar_card_selected{% endif %}">
+      <a href='{% url "dcodex-lectionary-similarity" ms.siglum comparison_sigla_string %}'>
+        <div data-toggle="tooltip" data-placement="bottom" title="{{ ms.name}}">
+        {{ ms.siglum }}
+        </div>
+      </a>
+    </div>
+  {% endfor %}
+</div>
+
+{% endblock left_sidebar %}
+
+
+{% block content %}
+<h1>Similarity: {{ manuscript }}</h1>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th scope="col">Day</th>
+      <th scope="col">Passage</th>
+      {% for ms in comparison_mss %}
+      <th scope="col"><a href='{{ ms.get_absolute_url }}' data-toggle="tooltip" data-placement="bottom"
+          title="{{ ms.name}}">{{ ms.siglum }}</a></th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for lection_membership,similarities in data.items %}
+    <tr>
+      <th scope='row'>{{ lection_membership.day }}</th>
+      <th scope='row'>
+        <a href='{% url "dcodex-manuscript-verse" manuscript.siglum lection_membership.lection.bible_verse_url_ref  %}'>
+          {{ lection_membership.lection }}
+        </a>
+      </th>
+      {% for ms, similarity in similarities.items %}
+      <td style='{% if similarity and similarity > threshold %}background-color: yellow;{% endif %}' </td>
+        <a href='{% url "dcodex-manuscript-verse" ms.siglum lection_membership.lection.bible_verse_url_ref  %}'>
+          {% if similarity %}
+          {{similarity|floatformat:1}}%
+          {% else %}
+          –
+          {% endif %}
+        </a>
+      </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+
+{% endblock content %}
