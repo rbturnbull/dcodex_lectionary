@@ -12,8 +12,6 @@ from polymorphic.models import PolymorphicModel
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-from scipy.special import expit
-import gotoh
 
 from dcodex.models import Manuscript, Verse, VerseLocation
 from dcodex_bible.models import BibleVerse
@@ -313,10 +311,13 @@ class LectionaryVerseMembership(models.Model):
     verse  = models.ForeignKey(LectionaryVerse, on_delete=models.CASCADE)
     order = models.IntegerField(default=0)
     cumulative_mass_from_lection_start = models.IntegerField(default=0, help_text="The total mass of verses from the beginning of the lection until this verse")
+    
     class Meta:
         ordering = ['order','verse__bible_verse']
+    
     def __str__(self):
         return "%d: %s in %s" % (self.order, self.verse, self.lection)
+    
     
 class FixedDate(models.Model):
     """
@@ -1260,128 +1261,42 @@ class Lectionary( Manuscript ):
         return None
 
     def similarity_lection( self, lection, comparison_mss, similarity_func=distance.similarity_levenshtein, ignore_incipits=False ):
-
-        similarity_values = np.zeros( (len(comparison_mss),) )
-        counts = np.zeros( (len(comparison_mss),), dtype=int )
-        has_seen_incipit = False
-        for verse_index, verse in enumerate(lection.verses.all()):
-            if not verse.bible_verse:
-                continue
-            if not has_seen_incipit:
-                has_seen_incipit = True
-                if ignore_incipits:
-                    continue
-            my_transcription = self.normalized_transcription( verse )
-            if not my_transcription:
-                continue
-            
-            for ms_index, ms in enumerate(comparison_mss):
-                comparison_transcription = ms.normalized_transcription( verse ) if type(ms) is Lectionary else ms.normalized_transcription( verse.bible_verse )
-                if not comparison_transcription:
-                    continue
-                
-                similarity_values[ms_index] += similarity_func( my_transcription, comparison_transcription )
-                counts[ms_index] += 1
-
-        averages = []
-        for similarity_value, count in zip(similarity_values, counts):
-            average = None if count == 0 else similarity_value/count
-            averages.append(average)
-        return averages
-
-    def similarity_probabilities_lection( self, lection, comparison_mss, weights, gotoh_param, prior_log_odds=0.0, ignore_incipits=False ):
-        gotoh_totals = np.zeros( (len(comparison_mss),4), dtype=np.int32 )   
-        weights = np.asarray(weights)  
+        from .similarity import similarity_lection
         
-        for verse_index, verse in enumerate(lection.verses.all()):
-            if verse_index == 0 and ignore_incipits:
-                continue
-            my_transcription = self.normalized_transcription( verse )
-            if not my_transcription:
-                continue
-            
-            for ms_index, ms in enumerate(comparison_mss):
-                comparison_transcription = ms.normalized_transcription( verse ) if type(ms) is Lectionary else ms.normalized_transcription( verse.bible_verse )
-                if not comparison_transcription:
-                    continue
-
-                counts = gotoh.counts( my_transcription, comparison_transcription, *gotoh_param )
-                gotoh_totals[ms_index][:] += counts
-
-        results = []        
-        for ms_index in range(len(comparison_mss)):
-            length = gotoh_totals[ms_index].sum()            
-            similarity = 100.0 * gotoh_totals[ms_index][0]/length if length > 0 else np.NAN
-            logodds = prior_log_odds + np.dot( gotoh_totals[ms_index], weights )
-            posterior_probability = expit( logodds )
-            
-            results.extend([similarity, posterior_probability])
-                        
-        return results
+    def similarity_probabilities_lection( self, lection, comparison_mss, weights, gotoh_param, prior_log_odds=0.0, ignore_incipits=False ):
+        from .similarity import similarity_probabilities_lection
+        return similarity_probabilities_lection( self, lection, comparison_mss, weights, gotoh_param, prior_log_odds, ignore_incipits )
 
     def similarity_dict( self, comparison_mss, min_verses = 2, ignore_unstranscribed=True, **kwargs ):
-        similarity_dict = dict()
-        for i, lection_in_system in enumerate(self.system.lections_in_system().all()):
+        from .similarity import similarity_dict
+        return similarity_dict(self.system, self, comparison_mss=comparison_mss, min_verses=min_verses, ignore_unstranscribed=ignore_unstranscribed, **kwargs)
 
-            lection = lection_in_system.lection
-            if lection.verses.count() < min_verses:
-                continue
+    # def similarity_df( self, comparison_mss, min_verses = 2, ignore_unstranscribed=True, **kwargs ):
+    #     """ TODO get from similarity_dict """
+    #     columns = ['Lection']
                 
-            if VerseTranscriptionBase.objects.filter(manuscript=self, verse__in=lection.verses.all()).count() < min_verses:
-                continue
-
-            averages = self.similarity_lection( lection, comparison_mss, **kwargs )
-            similarity_dict[ lection_in_system ] = dict(zip( comparison_mss, averages ))
-        return similarity_dict
-
-
-    def similarity_df( self, comparison_mss, min_verses = 2, ignore_unstranscribed=True, **kwargs ):
-        """ TODO get from similarity_dict """
-        columns = ['Lection']
-                
-        columns += [ms.siglum for ms in comparison_mss]
+    #     columns += [ms.siglum for ms in comparison_mss]
         
-        data = []
-        for i, lection_in_system in enumerate(self.system.lections_in_system().all()):
-            lection = lection_in_system.lection
-            if lection.verses.count() < min_verses:
-                continue
+    #     data = []
+    #     for i, lection_in_system in enumerate(self.system.lections_in_system().all()):
+    #         lection = lection_in_system.lection
+    #         if lection.verses.count() < min_verses:
+    #             continue
                 
-            if VerseTranscriptionBase.objects.filter(manuscript=self, verse__in=lection.verses.all()).count() < min_verses:
-                continue
+    #         if VerseTranscriptionBase.objects.filter(manuscript=self, verse__in=lection.verses.all()).count() < min_verses:
+    #             continue
 
-            averages = self.similarity_lection( lection, comparison_mss, **kwargs )
+    #         averages = self.similarity_lection( lection, comparison_mss, **kwargs )
                 
-            data.append( [str(lection_in_system)] + averages )
+    #         data.append( [str(lection_in_system)] + averages )
         
-        df = pd.DataFrame(data, columns=columns)
-        return df    
+    #     df = pd.DataFrame(data, columns=columns)
+    #     return df    
         
                         
     def similarity_probabilities_df( self, comparison_mss, min_verses=2, **kwargs ):
-        columns = ['Lection','Lection_Membership__id','Lection_Membership__order']
-        for ms in comparison_mss:
-            columns.extend( [ms.siglum + "_similarity", ms.siglum + "_probability"] )
-                
-        
-        df = pd.DataFrame(columns=columns)
-        index = 0
-        for lection_in_system in self.system.lections_in_system().all():
-            lection = lection_in_system.lection
-            if lection.verses.count() < min_verses:
-                continue
-
-#            if ignore_untranscribed and self.lection_transcribed_count( lection ) == 0:
-#                print("Ignoring untranscribed lection:", lection)
-#                continue
-            
-            results = self.similarity_probabilities_lection( lection, comparison_mss, **kwargs )
-                
-            df.loc[index] = [str(lection_in_system), lection_in_system.id, lection_in_system.order] + results
-            index += 1
-
-        print('similarity_probabilities_df indexes:', index)
-        return df  
+        from .similarity import similarity_probabilities_df
+        return similarity_probabilities_df( self.system, self, comparison_mss, min_verses=2, **kwargs)
           
     def similarity_families_array( self, comparison_mss, start_verse, end_verse, threshold, **kwargs ):
         verse_count = end_verse.rank - start_verse.rank + 1
@@ -1454,227 +1369,13 @@ class Lectionary( Manuscript ):
     def distance_between_verses( self, verse1, verse2 ):
         return self.cumulative_mass( verse2 ) - self.cumulative_mass( verse1 )
         
-        
     def plot_lections_similarity( 
-                self, 
-                mss_sigla, 
-                lections = None,
-                min_lection_index = None,            
-                max_lection_index = None,            
-                output_filename = None,
-                csv_filename = None, 
-                force_compute = False, 
-                gotoh_param = [6.6995597099885345, -0.9209875054657459, -5.097397327423096, -1.3005714416503906], # From PairHMM of whole dataset
-                weights = [0.07124444438506426, -0.2723489152810223, -0.634987796501936, -0.05103656566400282], # From whole dataset
-                figsize=(12,7),
-                colors = ['#007AFF', '#6EC038', 'darkred', 'magenta'],
-                mode = LIKELY__UNLIKELY,
-                xticks = [],
-                xticks_rotation=0,
-                minor_markers=1,
-                ymin=60,
-                ymax=100,
-                prior_log_odds=0.0,
-                annotations=[],            
-                annotation_color='red',
-                annotations_spaces_to_lines=False,              
-                legend_location="best",
-                circle_marker=True,
-                highlight_regions=[],
-                highlight_color='yellow',
-                fill_empty=True,
-                space_evenly=False,
-                ignore_untranscribed=False,
+        self, 
+        mss_sigla, 
+        **kwargs,
     ):
-
-        import pandas as pd
-        import numpy as np
-        import matplotlib.pyplot as plt
-        from matplotlib import rcParams
-        rcParams['font.family'] = 'Linux Libertine O'
-        rcParams.update({'font.size': 14})
-    
-        #plt.rc('text', usetex=True)
-        #plt.rc('text.latex', preamble=r'\usepackage{amsmath}')
-
-        import matplotlib.ticker as mtick
-        import matplotlib.lines as mlines
-        from os import access, R_OK
-        from os.path import isfile
-
-        from matplotlib.ticker import FixedLocator
-
-        fig, ax = plt.subplots(figsize=figsize)
-
-        mss = [Manuscript.find( siglum ) for siglum in mss_sigla.keys()]
-    
-        if not force_compute and csv_filename and isfile( csv_filename ) and access(csv_filename, R_OK):
-            df = pd.read_csv(csv_filename)
-        else:    
-            df = self.similarity_probabilities_df( mss, weights=weights, gotoh_param=gotoh_param, prior_log_odds=prior_log_odds )
-            if csv_filename:
-                df.to_csv( csv_filename )
-
-        if min_lection_index:
-            if isinstance( min_lection_index, LectionInSystem ):
-                min_lection_index = min_lection_index.order
-            df = df[ df['Lection_Membership__order'] >= min_lection_index ]
-        if max_lection_index:
-            if isinstance( max_lection_index, LectionInSystem ):
-                max_lection_index = max_lection_index.order
-            print('max_lection_index', max_lection_index)
-            df = df[df['Lection_Membership__order'] <= max_lection_index ]
-            
-        if lections:
-            lection_ids = []
-            for lection in lections:
-                if isinstance(lection,LectionInSystem):
-                    lection_ids.append( lection.id )
-                else:
-                    lection_ids.append( lection )
-#            print(df)
-            df = df[ df['Lection_Membership__id'].isin( lection_ids ) ]
-#            print(df)
-#            print(lection_ids)
-#            return
-    
-        min = df.index.min()
-        max = df.index.max()
-        if fill_empty:
-            df = df.set_index( 'Lection_Membership__order' )    
-            df = df.reindex( np.arange( min, max+1 ) )  
-        
-        if space_evenly:
-            df.index = np.arange( len(df.index) )
-    
-        print(df)
-        #return
-
-        circle_marker = 'o' if circle_marker else ''
-    
-        for index, ms_siglum in enumerate(mss_sigla.keys()): 
-            ms_df = df[ df[ms_siglum+'_similarity'].notnull() ] if ignore_untranscribed else df
-            
-           
-            if mode is HIGHLY_LIKELY__LIKELY__ELSE:
-                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask(ms_df[ms_siglum+"_probability"] < 0.95), '-', color=colors[index], linewidth=2.5, label=mss_sigla[ms_siglum] + " (Highly Likely)" );
-                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask( (ms_df[ms_siglum+"_probability"] > 0.95) | (ms_df[ms_siglum+"_probability"] < 0.5)), '-', color=colors[index], linewidth=1.5, label=mss_sigla[ms_siglum] + " (Likely)" );        
-                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask(ms_df[ms_siglum+"_probability"] > 0.95), '--', color=colors[index], linewidth=0.5, label=mss_sigla[ms_siglum] + " (Unlikely)" );        
-        
-            elif mode is HIGHLY_LIKELY__ELSE:
-                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask(ms_df[ms_siglum+"_probability"] < 0.95), '-', color=colors[index], linewidth=2.5, label=mss_sigla[ms_siglum] + " (Highly Likely)" );
-                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'], '--', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum] );        
-            elif mode is SOLID:
-                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'], marker=circle_marker, linestyle='-', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum], zorder=10, markerfacecolor='white', markeredgecolor=colors[index], markersize=5.0 );        
-            else:    
-                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'].mask(ms_df[ms_siglum+"_probability"] < 0.5), marker=circle_marker, linestyle='-', color=colors[index], linewidth=2.5, label=mss_sigla[ms_siglum] + " (Likely)", zorder=11, markersize=8.0,  markerfacecolor=colors[index], markeredgecolor=colors[index]);
-                plt.plot(ms_df.index, ms_df[ms_siglum+'_similarity'], marker=circle_marker, linestyle='--', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum] + " (Unlikely)", zorder=10, markerfacecolor='white', markeredgecolor=colors[index], markersize=5.0 );        
-    #            plt.plot(df.index, df[ms_siglum+'_similarity'].mask(df[ms_siglum+"_probability"] > 0.5), '--', color=colors[index], linewidth=1, label=mss_sigla[ms_siglum] + " (Unlikely)" );        
-
-        plt.ylim([ymin, ymax])
-        ax.set_xticklabels([])
-    
-
-        plt.ylabel(f'Similarity with {self.siglum}', horizontalalignment='right', y=1.0)
-        ax.yaxis.set_major_formatter(mtick.PercentFormatter(decimals=0))
-    
-    
-        #######################
-        ##### Grid lines  #####
-        ####################### 
-    
-    #    first_lection_membership = self.system.first_lection_in_system()
-    #    last_lection_membership = self.system.last_lection_in_system()
-           
-        ###### Major Grid Lines ######
-        major_tick_locations = []    
-        major_tick_annotations = []
-
-        for membership in xticks:
-            if type(membership) == tuple:
-                if not isinstance( membership[0], LectionInSystem ):
-                    print("Trouble with membership:", membership)
-                    continue
-                print( 'looking for:', membership[0].id, membership )                    
-                x = df.index[ df['Lection_Membership__id'] == membership[0].id ].values.item()
-                description = membership[-1]
-            else:
-                if not isinstance( membership, LectionInSystem ):
-                    print("Trouble with membership:", membership)
-                    continue
-            
-                print( 'looking for:', membership.id, membership )
-                x = df.index[ df['Lection_Membership__id'] == membership.id ].values.item()
-                description = str(membership.day)
-
-            if annotations_spaces_to_lines:
-                description = description.replace( ' ', "\n" )
-            major_tick_locations.append( x )
-            major_tick_annotations.append( description )
-            
-        plt.xticks(major_tick_locations, major_tick_annotations, rotation=xticks_rotation )        
-        linewidth = 2
-        ax.xaxis.grid(True, which='major', color='#666666', linestyle='-', alpha=0.4, linewidth=linewidth)
-            
-        ###### Minor Grid Lines ######
-        minor_ticks = [x for x in df.index if x not in major_tick_locations and x % minor_markers == 0]
-        ax.xaxis.set_minor_locator(FixedLocator(minor_ticks))
-        ax.xaxis.grid(True, which='minor', color='#666666', linestyle='-', alpha=0.2, linewidth=1,)
-
-        ###### Annotations ######
-        for annotation in annotations:
-            if type(annotation) == tuple:
-                if not isinstance( annotation[0], LectionInSystem ):
-                    print("Trouble with annotation:", annotation)
-                    continue
-            
-                annotation_x = df.index[ df['Lection_Membership__id'] == annotation[0].id ].item()
-                annotation_description = annotation[-1]
-            else:
-                if not isinstance( annotation, LectionInSystem ):
-                    print("Trouble with annotation:", annotation)
-                    continue
-            
-                annotation_x = df.index[ df['Lection_Membership__id'] == annotation.id ].item()
-                annotation_description = str(annotation.day)            
-
-            if annotations_spaces_to_lines:
-                annotation_description = annotation_description.replace( ' ', "\n" )
-            plt.axvline(x=annotation_x, color=annotation_color, linestyle="--")
-            ax.annotate(annotation_description, xy=(annotation_x, ymax), xycoords='data', ha='center', va='bottom',xytext=(0,10), textcoords='offset points', fontsize=10, family='Linux Libertine O', color=annotation_color)
-
-        ax.legend(shadow=False, title='', framealpha=1, edgecolor='black', loc=legend_location, facecolor="white", ncol=2).set_zorder(100)
-        
-        for region in highlight_regions:
-            from matplotlib.patches import Rectangle
-            region_start = region[0]
-            if isinstance(region_start, LectionInSystem):
-                region_start = df.index[ df['Lection_Membership__id'] == region_start.id ].item()                
-            region_end = region[1]
-            if isinstance(region_end, LectionInSystem):
-                region_end = df.index[ df['Lection_Membership__id'] == region_end.id ].item()                
-            
-            rect = Rectangle((region_start,ymin),region_end-region_start,ymax-ymin,linewidth=1,facecolor=highlight_color)
-            ax.add_patch(rect)
-
-
-        plt.show()
-    
-        if output_filename:
-            fig.tight_layout()
-            fig.savefig(output_filename)    
-            
-        notnull = False
-        for index, ms_siglum in enumerate(mss_sigla.keys()):     
-            notnull = notnull | df[ms_siglum+'_similarity'].notnull()
-            
-        ms_df = df[ notnull ]
-        print(ms_df)
-                
-        for index, ms_siglum in enumerate(mss_sigla.keys()):     
-            print( ms_siglum, df[ms_siglum+'_similarity'].mean() )
-
-        print("Number of lections:", ms_df.shape[0])
+        from .plotting import plot_lections_similarity
+        return plot_lections_similarity(self,mss_sigla, **kwargs)
 
 
 class AffiliationLectionsSet(AffiliationBase):

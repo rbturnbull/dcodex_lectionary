@@ -9,6 +9,8 @@ from dcodex.util import get_request_dict
 import logging
 import json
 
+from .similarity import similarity_dict
+
 @login_required
 def lection_verses(request):
     request_dict = get_request_dict(request)
@@ -193,25 +195,19 @@ def similarity(request, request_siglum, comparison_sigla_string):
         if comparison_ms:
             comparison_mss.append( comparison_ms )
     
-    data = manuscript.similarity_dict( comparison_mss, ignore_incipits=True )
+    data = similarity_dict( manuscript, comparison_mss, ignore_incipits=True )
     threshold = 76.4    
 
     context = dict(
         manuscript=manuscript,
         data=data,
         comparison_mss=comparison_mss,
-        all_mss=Lectionary.objects.all(),
+        lectionaries=Lectionary.objects.all(),
+        bible_mss=BibleManuscript.objects.all(),
         comparison_sigla_string=comparison_sigla_string,
         threshold=threshold,
     )
     return render(request, 'dcodex_lectionary/similarity.html', context )
-
-    df = manuscript.similarity_df(comparison_mss, ignore_incipits=True)
-    title = "%s Similarity" % (str(manuscript.siglum))
-    styled_df = df.style.apply( lambda x: ['font-weight: bold; background-color: yellow' if value and value > threshold else '' for value in x],
-                  subset=comparison_sigla)
-    return render(request, 'dcodex/table.html', {'table': styled_df.render(), 'title':title} )
-    #return render(request, 'dcodex/table.html', {'table': df.to_html(), 'title':title} )
 
 
 @login_required

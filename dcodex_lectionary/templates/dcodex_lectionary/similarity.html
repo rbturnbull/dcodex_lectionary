@@ -3,9 +3,18 @@
 {% block title %}{{ manuscript.siglum}} Similarity{% endblock %}
 
 {% block left_sidebar %}
-<h3>Base MS.</h3>
+<h2>Base MS.</h2>
 <div id="sidebar_cards">
-  {% for ms in all_mss %}
+  {% for ms in lectionaries %}
+    <div class="sidebar_card {% if ms.id == manuscript.id %}sidebar_card_selected{% endif %}">
+      <a href='{% url "dcodex-lectionary-similarity" ms.siglum comparison_sigla_string %}'>
+        <div data-toggle="tooltip" data-placement="bottom" title="{{ ms.name}}">
+        {{ ms.siglum }}
+        </div>
+      </a>
+    </div>
+  {% endfor %}
+  {% for ms in bible_mss %}
     <div class="sidebar_card {% if ms.id == manuscript.id %}sidebar_card_selected{% endif %}">
       <a href='{% url "dcodex-lectionary-similarity" ms.siglum comparison_sigla_string %}'>
         <div data-toggle="tooltip" data-placement="bottom" title="{{ ms.name}}">
@@ -17,6 +26,31 @@
 </div>
 
 {% endblock left_sidebar %}
+
+{% block right_sidebar %}
+<h2>Comparison MSS.</h2>
+<div id="sidebar_cards">
+  {% for ms in lectionaries %}
+    <div class="sidebar_card {% if ms in comparison_mss %}sidebar_card_selected{% endif %}">
+      <a href='{% url "dcodex-lectionary-similarity" manuscript.siglum comparison_sigla_string %}'>
+        <div data-toggle="tooltip" data-placement="bottom" title="{{ ms.name}}">
+        {{ ms.siglum }}
+        </div>
+      </a>
+    </div>
+  {% endfor %}
+  {% for ms in bible_mss %}
+  <div class="sidebar_card {% if ms in comparison_mss %}sidebar_card_selected{% endif %}">
+    <a href='{% url "dcodex-lectionary-similarity" manuscript.siglum comparison_sigla_string %}'>
+        <div data-toggle="tooltip" data-placement="bottom" title="{{ ms.name}}">
+        {{ ms.siglum }}
+        </div>
+      </a>
+    </div>
+  {% endfor %}
+</div>
+
+{% endblock right_sidebar %}
 
 
 {% block content %}
