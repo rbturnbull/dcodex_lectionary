@@ -1,6 +1,6 @@
 from django.contrib import admin
 from polymorphic.admin import PolymorphicParentModelAdmin, PolymorphicChildModelAdmin, PolymorphicChildModelFilter
-from adminsortable2.admin import SortableInlineAdminMixin, SortableAdminMixin
+from adminsortable2.admin import SortableInlineAdminMixin, SortableAdminMixin, SortableAdminBase
 
 from dcodex.admin import ManuscriptChildAdmin
 from .models import *
@@ -69,7 +69,7 @@ class AffiliationLectionsAdmin(admin.ModelAdmin):
     model = AffiliationLections
     
 @admin.register(Lection)    
-class LectionAdmin(admin.ModelAdmin):
+class LectionAdmin(SortableAdminBase, admin.ModelAdmin):
     filter_horizontal = ('verses',)
     search_fields = ['description']  
 #    inlines = [LectionaryVerseMembershipInline]
