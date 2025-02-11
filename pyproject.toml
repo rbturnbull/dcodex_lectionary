@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcodex_lectionary"
-version = "0.3.1"
+version = "0.3.2"
 description = "Extension for D-Codex to use lectionaries"
 authors = ["Robert Turnbull <robert.turnbull@unimelb.edu.au>"]
 license = "Apache"
