@@ -14,6 +14,13 @@ django-imagedeck = ">=0.4.0"
 
 [tool.poetry.group.dev.dependencies]
 coverage = ">=5.5"
+pytest-django = ">=4.9.0"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+django_find_project = true
+DJANGO_SETTINGS_MODULE = "tests.settings"
+pythonpath = "."
 
 [build-system]
 requires = ["setuptools >= 40.6.0", "poetry-core>=1.0.0"]

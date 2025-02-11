@@ -5,11 +5,13 @@ import sys, os, django
 from django.conf import settings
 from django.test.utils import get_runner
 
+breakpoint()
+
 if __name__ == "__main__" or True:
 
     from pathlib import Path
 
-    settings_module = "tests.test_settings"
+    settings_module = "tests.settings"
     settings_path = Path(settings_module.replace('.', "/") + ".py")
 
     # Find the project base directory
