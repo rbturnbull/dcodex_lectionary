@@ -6,14 +6,14 @@ authors = ["Robert Turnbull <robert.turnbull@unimelb.edu.au>"]
 license = "Apache"
 
 [tool.poetry.dependencies]
-python = "^3.8"
-Django = "^3.2.6"
-pandas = "^1.3.1"
+python = ">=3.8,<3.12"
+Django = ">=3.2.6"
+pandas = ">=1.3.1"
 dcodex-bible = {git = "https://github.com/rbturnbull/dcodex_bible.git"}
 django-imagedeck = {git = "https://gitlab.unimelb.edu.au/rturnbull/django-imagedeck.git"}
 
-[tool.poetry.dev-dependencies]
-coverage = "^5.5"
+[poetry.group.dev.dependencies]
+coverage = ">=5.5"
 
 [build-system]
 requires = ["setuptools >= 40.6.0", "poetry-core>=1.0.0"]
