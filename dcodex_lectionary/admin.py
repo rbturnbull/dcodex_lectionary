@@ -98,7 +98,7 @@ class LectionInSystemAdmin(admin.ModelAdmin):
 
 
 @admin.register(LectionarySystem)    
-class LectionarySystemAdmin(admin.ModelAdmin):
+class LectionarySystemAdmin(SortableAdminBase, admin.ModelAdmin):
 #    inlines = [LectionInSystemInline]
     inlines = [LectionInSystemInlineSortable]
 
